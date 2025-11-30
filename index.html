@@ -231,6 +231,17 @@
             font-size: 10px;
             margin-top: 15px;
         }
+
+        /* Новые стили для расположения полей в ряд */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .input-row .input-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -275,28 +286,32 @@
         <!-- Вкладка РАЗМЕТКА -->
         <div id="markup" class="tab-content">
             <div class="section">
-                <div class="input-group">
-                    <label>Отверстий в шаблоне:</label>
-                    <input type="number" id="holesInTemplate" value="11" step="1" inputmode="numeric">
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Отверстий в шаблоне:</label>
+                        <input type="number" id="holesInTemplate" value="11" step="1" inputmode="numeric" onfocus="this.select();">
+                    </div>
+                    <div class="input-group">
+                        <label>Погрешность (мм):</label>
+                        <input type="number" id="tolerance" value="10.0" step="0.1" inputmode="decimal" onfocus="this.select();">
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label>Погрешность (мм):</label>
-                    <input type="number" id="tolerance" value="10.0" step="0.1" inputmode="decimal">
-                </div>
-                <div class="input-group">
-                    <label>Отверстий на ленте:</label>
-                    <input type="number" id="holesOnTape" value="0" step="1" class="auto-field" readonly>
-                </div>
-                <div class="input-group">
-                    <label>Проходов:</label>
-                    <input type="number" id="passes" value="0" step="0.1" class="auto-field" readonly>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Отверстий на ленте:</label>
+                        <input type="number" id="holesOnTape" value="0" step="1" class="auto-field" readonly>
+                    </div>
+                    <div class="input-group">
+                        <label>Проходов:</label>
+                        <input type="number" id="passes" value="0" step="0.1" class="auto-field" readonly>
+                    </div>
                 </div>
                 <div class="results-info" id="stepsResults">Введите количество отверстий в шаблоне</div>
                 <div class="results-info" id="runResults">Введите погрешность</div>
             </div>
         </div>
 
-        <div class="version">v15.0</div>
+        <div class="version">v15.5</div>
     </div>
 
     <!-- Модальное окно для ввода параметров -->
@@ -309,7 +324,8 @@
                    class="modal-input" 
                    inputmode="decimal"
                    step="0.1"
-                   placeholder="Введите значение">
+                   placeholder="Введите значение"
+                   autofocus>
             <div class="modal-buttons">
                 <button class="modal-button secondary" onclick="cancelParameterInput()">Отмена</button>
                 <button class="modal-button primary" onclick="confirmParameterInput()">Далее</button>
@@ -411,7 +427,6 @@
             document.getElementById('modalTitle').textContent = step.title;
             document.getElementById('stepIndicator').textContent = `Шаг ${currentInputStep + 1} из ${inputSteps.length}`;
             document.getElementById('modalInput').value = '';
-            document.getElementById('modalInput').focus();
             
             // Настраиваем inputmode в зависимости от типа данных
             if (step.type === 'numeric') {
@@ -423,6 +438,13 @@
             }
             
             document.getElementById('parameterModal').classList.add('active');
+            
+            // Фокус и выделение текста с небольшой задержкой для гарантии
+            setTimeout(() => {
+                const modalInput = document.getElementById('modalInput');
+                modalInput.focus();
+                modalInput.select();
+            }, 100);
         }
 
         // Подтверждение ввода параметра
@@ -433,6 +455,8 @@
             
             if (!value) {
                 alert('Пожалуйста, введите значение');
+                input.focus();
+                input.select();
                 return;
             }
             
@@ -441,12 +465,16 @@
                 numericValue = parseInt(value);
                 if (isNaN(numericValue) || numericValue <= 0) {
                     alert('Пожалуйста, введите корректное целое число');
+                    input.focus();
+                    input.select();
                     return;
                 }
             } else {
                 numericValue = parseFloat(value);
                 if (isNaN(numericValue) || numericValue <= 0) {
                     alert('Пожалуйста, введите корректное число');
+                    input.focus();
+                    input.select();
                     return;
                 }
             }
@@ -571,9 +599,13 @@
             document.querySelectorAll('.distance-value')[1].innerHTML = `<strong>${Math.round(difference)} мм</strong>`;
             document.querySelectorAll('.distance-value')[2].innerHTML = `<strong>${Math.round(angle)}°</strong>`;
             
-            // Расчет шаблона с точным округлением как в боте
+            // Расчет шаблона с ограничением до ~1300 и максимум 50 итераций
             let templateResults = [];
-            for (let i = 1; i <= 20; i++) {
+            const TARGET_VALUE = 1300; // Целевое значение
+            const MAX_ITERATIONS = 50; // Максимум 50 итераций для защиты
+            
+            let i = 1;
+            while (i <= MAX_ITERATIONS) {
                 const currentArc = calculatedDistance * i;
                 const effectiveRadius = userParams.radius - userParams.edge;
                 
@@ -584,13 +616,22 @@
                 
                 const templateAngle = currentArc / effectiveRadius / 2;
                 const result = 2 * effectiveRadius * Math.sin(templateAngle);
-                // Используем точное округление как в Python round()
-                templateResults.push(preciseRound(result, 1));
+                const roundedResult = preciseRound(result, 1);
+                
+                // Добавляем результат
+                templateResults.push(roundedResult);
+                
+                // Проверяем, достигли ли целевого значения
+                if (roundedResult >= TARGET_VALUE) {
+                    break;
+                }
+                
+                i++;
             }
             
             let results = '';
-            templateResults.forEach((val, i) => {
-                results += (i+1) + '. ' + val + '\n';
+            templateResults.forEach((val, index) => {
+                results += (index + 1) + '. ' + val + '\n';
             });
             
             document.getElementById('differenceResults').textContent = results;
