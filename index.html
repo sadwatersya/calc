@@ -88,7 +88,6 @@
             padding: 12px;
             border-radius: 6px;
             margin: 10px 0;
-            /* Убрана border-left */
             font-size: 14px;
             line-height: 1.5;
             font-family: Arial, sans-serif;
@@ -118,7 +117,6 @@
             padding: 10px;
             border-radius: 5px;
             margin: 10px 0;
-            /* Убрана border-left */
             font-size: 17px;
             line-height: 1.4;
             white-space: pre-wrap;
@@ -151,6 +149,32 @@
             border: 1px solid #e1e5e9;
             font-size: 14px;
             line-height: 1.4;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            position: relative;
+        }
+        .params-info {
+            flex: 1;
+        }
+        .difference-value {
+            font-weight: 700;
+            color: #0d652d;
+            font-size: 22px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100%;
+            padding: 5px 0;
+            margin-left: 15px;
+        }
+        .difference-label {
+            font-weight: 700;
+            color: #1e8e3e;
+            font-size: 16px;
+            margin-bottom: 8px;
         }
         
         /* Стили для модального окна ввода параметров */
@@ -281,10 +305,6 @@
                         <div class="distance-value">-</div>
                     </div>
                     <div class="distance-item">
-                        <div class="distance-label">Разница:</div>
-                        <div class="distance-value">-</div>
-                    </div>
-                    <div class="distance-item">
                         <div class="distance-label">Угол:</div>
                         <div class="distance-value">-</div>
                     </div>
@@ -332,7 +352,7 @@
             </div>
         </div>
 
-        <div class="version">SHAMANOV SERGEY</div>
+        <div class="version">v15.7</div>
     </div>
 
     <!-- Модальное окно для ввода параметров -->
@@ -383,7 +403,8 @@
                 differenceResultsRight: document.getElementById('differenceResultsRight').textContent,
                 stepsResults: document.getElementById('stepsResults').textContent,
                 runResults: document.getElementById('runResults').textContent,
-                distanceValues: Array.from(document.querySelectorAll('.distance-value')).map(el => el.innerHTML)
+                distanceValues: Array.from(document.querySelectorAll('.distance-value')).map(el => el.innerHTML),
+                differenceValue: document.getElementById('differenceValue') ? document.getElementById('differenceValue').innerHTML : ''
             };
             localStorage.setItem('templateCalculatorData', JSON.stringify(data));
         }
@@ -413,10 +434,16 @@
                 if (data.runResults) document.getElementById('runResults').textContent = data.runResults;
                 
                 // Восстанавливаем значения в зеленом поле
-                if (data.distanceValues && data.distanceValues.length === 3) {
+                if (data.distanceValues && data.distanceValues.length === 2) {
                     document.querySelectorAll('.distance-value').forEach((el, index) => {
                         el.innerHTML = data.distanceValues[index];
                     });
+                }
+                
+                // Восстанавливаем значение разницы
+                const differenceValueElement = document.getElementById('differenceValue');
+                if (differenceValueElement && data.differenceValue) {
+                    differenceValueElement.innerHTML = data.differenceValue;
                 }
                 
                 // Пересчитываем все, если есть параметры
@@ -544,10 +571,16 @@
             const display = document.getElementById('paramsDisplay');
             if (userParams.radius && userParams.arc && userParams.holesCount && userParams.edge) {
                 display.innerHTML = `
-                    • Внешний радиус: <strong>${userParams.radius}</strong> мм<br>
-                    • Внешняя дуга: <strong>${userParams.arc}</strong> мм<br>
-                    • Количество отверстий: <strong>${userParams.holesCount}</strong><br>
-                    • Отступ от края: <strong>${userParams.edge}</strong> мм
+                    <div class="params-info">
+                        • Внешний радиус: <strong>${userParams.radius}</strong> мм<br>
+                        • Внешняя дуга: <strong>${userParams.arc}</strong> мм<br>
+                        • Количество отверстий: <strong>${userParams.holesCount}</strong><br>
+                        • Отступ от края: <strong>${userParams.edge}</strong> мм
+                    </div>
+                    <div class="difference-value">
+                        <div class="difference-label">РАЗНИЦА</div>
+                        <div id="differenceValue">-</div>
+                    </div>
                 `;
             } else {
                 display.innerHTML = 'Параметры не введены. Нажмите кнопку выше.';
@@ -620,8 +653,13 @@
             
             // Обновляем информацию в зеленом поле
             document.querySelectorAll('.distance-value')[0].innerHTML = `<strong>${preciseRound(distance, 1)} мм</strong>`;
-            document.querySelectorAll('.distance-value')[1].innerHTML = `<strong>${Math.round(difference)} мм</strong>`;
-            document.querySelectorAll('.distance-value')[2].innerHTML = `<strong>${Math.round(angle)}°</strong>`;
+            document.querySelectorAll('.distance-value')[1].innerHTML = `<strong>${Math.round(angle)}°</strong>`;
+            
+            // Обновляем разницу в сером поле
+            const differenceValueElement = document.getElementById('differenceValue');
+            if (differenceValueElement) {
+                differenceValueElement.innerHTML = `<strong>${Math.round(difference)} мм</strong>`;
+            }
             
             // Расчет шаблона с ограничением до ~1300 и максимум 50 итераций
             let templateResults = [];
@@ -809,6 +847,3 @@
     </script>
 </body>
 </html>
-
-
-
