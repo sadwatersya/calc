@@ -88,7 +88,7 @@
             padding: 12px;
             border-radius: 6px;
             margin: 10px 0;
-            border-left: 4px solid #34a853;
+            /* Убрана border-left */
             font-size: 14px;
             line-height: 1.5;
             font-family: Arial, sans-serif;
@@ -118,7 +118,7 @@
             padding: 10px;
             border-radius: 5px;
             margin: 10px 0;
-            border-left: 3px solid #1a73e8;
+            /* Убрана border-left */
             font-size: 14px;
             line-height: 1.4;
             white-space: pre-wrap;
@@ -242,6 +242,19 @@
             flex: 1;
             margin-bottom: 0;
         }
+
+        /* Стили для двухколоночного отображения результатов */
+        .two-column-results {
+            display: flex;
+            gap: 15px;
+        }
+        .results-column {
+            flex: 1;
+        }
+        .results-column .results-info {
+            margin: 0;
+            height: 100%;
+        }
     </style>
 </head>
 <body>
@@ -277,8 +290,16 @@
                     </div>
                 </div>
                 
-                <div class="results-info" id="differenceResults">
-                    Результаты появятся после ввода параметров
+                <div class="two-column-results" id="differenceResultsContainer">
+                    <div class="results-column">
+                        <div class="results-info" id="differenceResultsLeft">
+                            Результаты появятся после ввода параметров
+                        </div>
+                    </div>
+                    <div class="results-column">
+                        <div class="results-info" id="differenceResultsRight">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -311,7 +332,7 @@
             </div>
         </div>
 
-        <div class="version">v15.5</div>
+        <div class="version">v15.7</div>
     </div>
 
     <!-- Модальное окно для ввода параметров -->
@@ -358,7 +379,8 @@
                 tolerance: document.getElementById('tolerance').value,
                 holesOnTape: document.getElementById('holesOnTape').value,
                 passes: document.getElementById('passes').value,
-                differenceResults: document.getElementById('differenceResults').textContent,
+                differenceResultsLeft: document.getElementById('differenceResultsLeft').textContent,
+                differenceResultsRight: document.getElementById('differenceResultsRight').textContent,
                 stepsResults: document.getElementById('stepsResults').textContent,
                 runResults: document.getElementById('runResults').textContent,
                 distanceValues: Array.from(document.querySelectorAll('.distance-value')).map(el => el.innerHTML)
@@ -385,7 +407,8 @@
                 if (data.passes) document.getElementById('passes').value = data.passes;
                 
                 // Восстанавливаем результаты
-                if (data.differenceResults) document.getElementById('differenceResults').textContent = data.differenceResults;
+                if (data.differenceResultsLeft) document.getElementById('differenceResultsLeft').textContent = data.differenceResultsLeft;
+                if (data.differenceResultsRight) document.getElementById('differenceResultsRight').textContent = data.differenceResultsRight;
                 if (data.stepsResults) document.getElementById('stepsResults').textContent = data.stepsResults;
                 if (data.runResults) document.getElementById('runResults').textContent = data.runResults;
                 
@@ -570,8 +593,9 @@
 
         // Функция ШАБЛОН
         function calculateDifference() {
-            if (!userParams.radius || !userParams.arc || !userParams.holesCount || !userParams.edge) {
-                document.getElementById('differenceResults').textContent = 'Введите параметры для расчета';
+            if (!userParams.radius || !userParams.arc || !userParams.holesCount && !userParams.edge) {
+                document.getElementById('differenceResultsLeft').textContent = 'Введите параметры для расчета';
+                document.getElementById('differenceResultsRight').textContent = '';
                 document.querySelectorAll('.distance-value').forEach(el => el.textContent = '-');
                 return;
             }
@@ -610,7 +634,8 @@
                 const effectiveRadius = userParams.radius - userParams.edge;
                 
                 if (effectiveRadius <= 0) {
-                    document.getElementById('differenceResults').textContent = 'Ошибка: радиус должен быть больше отступа';
+                    document.getElementById('differenceResultsLeft').textContent = 'Ошибка: радиус должен быть больше отступа';
+                    document.getElementById('differenceResultsRight').textContent = '';
                     return;
                 }
                 
@@ -619,7 +644,7 @@
                 const roundedResult = preciseRound(result, 1);
                 
                 // Добавляем результат
-                templateResults.push(roundedResult);
+                templateResults.push({ index: i, value: roundedResult });
                 
                 // Проверяем, достигли ли целевого значения
                 if (roundedResult >= TARGET_VALUE) {
@@ -629,12 +654,25 @@
                 i++;
             }
             
-            let results = '';
-            templateResults.forEach((val, index) => {
-                results += (index + 1) + '. ' + val + '\n';
+            // Разделяем результаты на две колонки
+            const middleIndex = Math.ceil(templateResults.length / 2);
+            const leftColumnResults = templateResults.slice(0, middleIndex);
+            const rightColumnResults = templateResults.slice(middleIndex);
+            
+            // Формируем левую колонку
+            let leftResults = '';
+            leftColumnResults.forEach(item => {
+                leftResults += item.index + '. ' + item.value + '\n';
             });
             
-            document.getElementById('differenceResults').textContent = results;
+            // Формируем правую колонку
+            let rightResults = '';
+            rightColumnResults.forEach(item => {
+                rightResults += item.index + '. ' + item.value + '\n';
+            });
+            
+            document.getElementById('differenceResultsLeft').textContent = leftResults;
+            document.getElementById('differenceResultsRight').textContent = rightResults;
             
             saveToStorage();
         }
