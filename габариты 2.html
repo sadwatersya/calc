@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Габариты куска</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 500px;
+            margin: 20px auto;
+            padding: 15px;
+            background: #f5f5f5;
+            color: #333;
+            box-sizing: border-box;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            border: 2px solid #008080;
+        }
+        h1 {
+            text-align: center;
+            margin: 0 0 20px 0;
+            color: #008080;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .input-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 15px;
+            color: #006666;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            -moz-appearance: textfield;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"]:focus {
+            border-color: #FF8C00;
+            outline: none;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1);
+        }
+        .result {
+            background: #f8fdfd;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #008080;
+            margin-top: 25px;
+        }
+        .result h3 {
+            margin: 0 0 15px 0;
+            color: #008080;
+            border-bottom: 2px solid #FF8C00;
+            padding-bottom: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+        }
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 16px 0;
+            font-size: 18px;
+            align-items: center;
+        }
+        .result-label {
+            font-weight: 600;
+            color: #006666;
+        }
+        .result-value {
+            font-weight: 700;
+            color: #FF8C00;
+            font-size: 28px; /* УВЕЛИЧЕНО с 20px */
+        }
+        .dimension-row {
+            font-size: 22px;
+            margin: 20px 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #e6f7f7 0%, #f0fafa 100%);
+            border-radius: 8px;
+            border: 2px solid #008080;
+        }
+        .angle-container {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            padding: 12px;
+            background: linear-gradient(135deg, #e6f7f7 0%, #f0fafa 100%);
+            border-radius: 8px;
+            font-size: 16px;
+            border: 2px solid #008080;
+        }
+        .angle-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            padding: 0 5px;
+        }
+        .angle-label {
+            font-size: 13px;
+            color: #008080;
+            margin-bottom: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            text-align: center;
+        }
+        .angle-value {
+            font-weight: 700;
+            color: #FF8C00;
+            font-size: 18px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Габариты куска</h1>
+
+        <div class="input-group">
+            <label>Внешний радиус</label>
+            <input type="number" id="r1" step="any" min="0.1" value="3100">
+        </div>
+        <div class="input-group">
+            <label>Внутренний радиус</label>
+            <input type="number" id="r2" step="any" min="0.1" value="500">
+        </div>
+        <div class="input-group">
+            <label>Длина внешней дуги</label>
+            <input type="number" id="arc" step="any" min="0.1" value="9000">
+        </div>
+
+        <div class="result" id="result">
+            <h3>Результаты</h3>
+            
+            <div class="angle-container">
+                <div class="angle-item">
+                    <div class="angle-label">Угол</div>
+                    <div class="angle-value" id="angle_val">—</div>
+                </div>
+                <div class="angle-item">
+                    <div class="angle-label">Внутренняя дуга</div>
+                    <div class="angle-value" id="inner_arc_val">—</div>
+                </div>
+            </div>
+            
+            <div class="result-row dimension-row">
+                <span class="result-label">Длина:</span>
+                <span class="result-value" id="width_val">—</span>
+            </div>
+            
+            <div class="result-row dimension-row">
+                <span class="result-label">Ширина:</span>
+                <span class="result-value" id="height_val">—</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let timeoutId = null;
+        const delay = 500;
+
+        function calculate() {
+            const r1 = parseFloat(document.getElementById('r1').value);
+            const r2 = parseFloat(document.getElementById('r2').value);
+            const arc = parseFloat(document.getElementById('arc').value);
+
+            const angleVal = document.getElementById('angle_val');
+            const innerArc = document.getElementById('inner_arc_val');
+            const width = document.getElementById('width_val');
+            const height = document.getElementById('height_val');
+
+            if (isNaN(r1) || isNaN(r2) || isNaN(arc) || r1 <= r2 || r2 <= 0 || arc <= 0) {
+                angleVal.textContent = '—';
+                innerArc.textContent = '—';
+                width.textContent = '—';
+                height.textContent = '—';
+                return;
+            }
+
+            // Угол в радианах и градусах
+            const alpha = arc / r1;
+            const alphaDeg = (alpha * 180 / Math.PI).toFixed(1);
+            
+            // Только градусы
+            angleVal.textContent = alphaDeg + '°';
+
+            // Длина внутренней дуги (до целого)
+            innerArc.textContent = Math.round(r2 * alpha);
+
+            // Габариты (до целых)
+            const halfAlpha = alpha / 2;
+            const W = 2 * r1 * Math.sin(halfAlpha);
+            const H = r1 - r2 * Math.cos(halfAlpha);
+
+            width.textContent = Math.round(W);
+            height.textContent = Math.round(H);
+        }
+
+        function scheduleCalculation() {
+            document.getElementById('angle_val').textContent = 'считаем...';
+            document.getElementById('inner_arc_val').textContent = '—';
+            document.getElementById('width_val').textContent = '—';
+            document.getElementById('height_val').textContent = '—';
+
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            
+            timeoutId = setTimeout(calculate, delay);
+        }
+
+        document.getElementById('r1').addEventListener('input', scheduleCalculation);
+        document.getElementById('r2').addEventListener('input', scheduleCalculation);
+        document.getElementById('arc').addEventListener('input', scheduleCalculation);
+
+        calculate();
+    </script>
+</body>
+</html>
