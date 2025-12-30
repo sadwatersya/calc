@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Расчет раскроя повороток</title>
+    <style>
+        body { font-family: Arial; max-width: 500px; margin: 20px auto; padding: 20px; }
+        .input-label { margin: 5px 0 5px; font-weight: bold; color: #2c3e50; }
+        .input-field { 
+            width: 100%; padding: 12px; margin: 0 0 20px; font-size: 16px;
+            border: 2px solid #dee2e6; border-radius: 4px; box-sizing: border-box;
+        }
+        .input-field:focus { border-color: #2c3e50; outline: none; }
+        .calc-btn { 
+            width: 100%; padding: 14px; background: #27ae60; color: white; 
+            border: none; cursor: pointer; margin-top: 10px; font-size: 18px;
+            font-weight: bold; border-radius: 4px;
+        }
+        .calc-btn:hover { background: #219955; }
+        .result { margin-top: 25px; padding: 20px; background: #f8f9fa; text-align: center; border-radius: 4px; }
+        .size { font-size: 3em; font-weight: bold; margin: 15px 0; color: #2c3e50; }
+        .count { font-size: 3em; font-weight: bold; margin: 15px 0; color: #27ae60; }
+        .segments { font-size: 1em; margin: 15px 0; color: #666; }
+        .width-buttons { display: flex; gap: 10px; margin: 10px 0 25px; }
+        .width-btn { 
+            flex: 1; padding: 14px; text-align: center; background: #e9ecef; 
+            border: 2px solid #dee2e6; cursor: pointer; font-weight: bold;
+            font-size: 16px; border-radius: 4px;
+        }
+        .width-btn.selected { background: #2c3e50; color: white; border-color: #2c3e50; }
+    </style>
+</head>
+<body>
+    <h2>Расчет раскроя повороток</h2>
+    
+    <div class="input-label">Ширина материала:</div>
+    <div class="width-buttons">
+        <div class="width-btn selected" data-width="2000">2000 мм</div>
+        <div class="width-btn" data-width="3000">3000 мм</div>
+    </div>
+    
+    <div class="input-label">Внешний радиус R (мм):</div>
+    <input type="number" id="R" class="input-field" value="3100" autofocus>
+    
+    <div class="input-label">Внутренний радиус r (мм):</div>
+    <input type="number" id="r" class="input-field" value="500">
+    
+    <div class="input-label">Длина внешней дуги L (мм):</div>
+    <input type="number" id="L" class="input-field" value="3400">
+    
+    <button class="calc-btn" id="calculateBtn">Рассчитать</button>
+    
+    <div id="result" class="result"></div>
+
+    <script>
+        // Инициализация кнопок выбора ширины
+        const widthButtons = document.querySelectorAll('.width-btn');
+        let selectedWidth = 2000;
+        
+        widthButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                widthButtons.forEach(b => b.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedWidth = parseInt(this.getAttribute('data-width'));
+                setTimeout(calculate, 100);
+            });
+        });
+        
+        // Автовыделение и навигация
+        const inputs = [document.getElementById('R'), document.getElementById('r'), document.getElementById('L')];
+        const calculateBtn = document.getElementById('calculateBtn');
+        
+        inputs.forEach((input, index) => {
+            input.addEventListener('click', () => input.select());
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                        inputs[index + 1].select();
+                    } else {
+                        calculateBtn.focus();
+                        calculate();
+                    }
+                }
+            });
+        });
+        
+        calculateBtn.addEventListener('click', calculate);
+        
+        function calculate() {
+            const materialWidth = selectedWidth;
+            const R = parseFloat(document.getElementById('R').value);
+            const r = parseFloat(document.getElementById('r').value);
+            const L = parseFloat(document.getElementById('L').value);
+            
+            if (isNaN(R) || R <= 0 || isNaN(r) || r <= 0 || r >= R || isNaN(L) || L <= 0) {
+                document.getElementById('result').innerHTML = 
+                    `<p style="color:red; padding: 15px;">Ошибка: проверьте введенные значения</p>`;
+                return;
+            }
+            
+            const fullAngle = (L / R) * (180 / Math.PI);
+            const segAngles = [180, 120, 90];
+            let bestSolution = null;
+            
+            for (const segAngle of segAngles) {
+                const solution = calculateSolution(R, r, fullAngle, segAngle, materialWidth);
+                if (solution && solution.fits) {
+                    if (!bestSolution || solution.pieces.length < bestSolution.pieces.length) {
+                        bestSolution = solution;
+                    } else if (solution.pieces.length === bestSolution.pieces.length) {
+                        if (solution.quality < bestSolution.quality) {
+                            bestSolution = solution;
+                        }
+                    }
+                }
+            }
+            
+            if (!bestSolution) {
+                document.getElementById('result').innerHTML = 
+                    `<p style="color:red; padding: 15px;">Не помещается в ширину ${materialWidth} мм</p>`;
+                return;
+            }
+            
+            showResult(bestSolution, materialWidth);
+        }
+        
+        function calculateSolution(R, r, fullAngle, segAngle, maxWidth) {
+            const fullCount = Math.floor(fullAngle / segAngle);
+            let remainder = fullAngle % segAngle;
+            
+            if (Math.abs(remainder) < 0.001) remainder = 0;
+            
+            const pieces = [];
+            let fits = true;
+            
+            // Решаем: добавлять остаток к последнему сегменту или делать отдельным?
+            const combineWithLast = remainder <= segAngle / 2;
+            
+            if (fullCount > 0) {
+                // Сколько полных сегментов делать
+                const fullSegmentsToMake = combineWithLast ? fullCount - 1 : fullCount;
+                
+                // Полные сегменты
+                for (let i = 0; i < fullSegmentsToMake; i++) {
+                    const isSingle = false;
+                    const piece = calculatePiece(R, r, segAngle, segAngle, isSingle);
+                    if (piece.width > maxWidth) fits = false;
+                    pieces.push({...piece, angle: segAngle});
+                }
+                
+                // Последний сегмент (с остатком если combineWithLast)
+                if (combineWithLast) {
+                    const lastAngle = segAngle + remainder;
+                    const isSingle = (fullCount === 1 && remainder === 0);
+                    const lastPiece = calculatePiece(R, r, lastAngle, segAngle, isSingle);
+                    if (lastPiece.width > maxWidth) fits = false;
+                    pieces.push({...lastPiece, angle: lastAngle});
+                }
+                
+                // Остаток как отдельный кусок
+                if (remainder > 0 && !combineWithLast) {
+                    const isSingle = false;
+                    const remainderPiece = calculatePiece(R, r, remainder, segAngle, isSingle);
+                    if (remainderPiece.width > maxWidth) fits = false;
+                    pieces.push({...remainderPiece, angle: remainder});
+                }
+            } 
+            else {
+                // Один неполный сегмент
+                const isSingle = true;
+                const piece = calculatePiece(R, r, fullAngle, segAngle, isSingle);
+                if (piece.width > maxWidth) fits = false;
+                pieces.push({...piece, angle: fullAngle});
+            }
+            
+            if (!fits) return null;
+            
+            let maxPieceWidth = 0, maxPieceLength = 0;
+            for (const piece of pieces) {
+                if (piece.width > maxPieceWidth) maxPieceWidth = piece.width;
+                if (piece.length > maxPieceLength) maxPieceLength = piece.length;
+            }
+            
+            // Качество решения: максимальная разница с segAngle
+            let maxDiff = 0;
+            for (const piece of pieces) {
+                const diff = Math.abs(piece.angle - segAngle);
+                if (diff > maxDiff) maxDiff = diff;
+            }
+            
+            return {
+                segAngle: segAngle,
+                pieces: pieces,
+                remainder: remainder,
+                maxWidth: maxPieceWidth,
+                maxLength: maxPieceLength,
+                fits: true,
+                quality: maxDiff
+            };
+        }
+        
+        function calculatePiece(R, r, actualAngle, segAngle, isSinglePiece = false) {
+            let width, length;
+            
+            // Используем формулу для segAngle (выбранного типа сегмента)
+            if (segAngle === 180) {
+                width = R;
+                length = 2 * R;
+            } 
+            else if (segAngle === 120) {
+                width = (R - r) + (r / 2);
+                length = R * Math.sqrt(3);
+            } 
+            else { // 90°
+                width = (R - r) + (r * 0.293);
+                length = R * Math.sqrt(2);
+            }
+            
+            // Корректировка относительно segAngle
+            if (actualAngle !== segAngle) {
+                const degPerMm = (Math.PI * R) / 180;
+                const fullCorrection = (actualAngle - segAngle) * degPerMm;
+                
+                // Если один кусок и коррекция отрицательная - не применяем
+                if (!(isSinglePiece && fullCorrection < 0)) {
+                    let widthCoefficient = 1.0;
+                    if (segAngle === 120) widthCoefficient = 0.75;
+                    if (segAngle === 90) widthCoefficient = 0.55;
+                    
+                    width += fullCorrection * widthCoefficient;
+                    length += fullCorrection;
+                }
+            }
+            
+            // Припуски
+            width = Math.ceil((width + 60) / 100) * 100;
+            length = Math.ceil((length + 120) / 100) * 100;
+            
+            return { width, length };
+        }
+        
+        function showResult(solution, materialWidth) {
+            let html = '';
+            html += `<div class="size">${solution.maxLength} × ${solution.maxWidth}</div>`;
+            html += `<div class="count">${solution.pieces.length} шт</div>`;
+            html += `<div class="segments">Сегменты по ${solution.segAngle}° | Материал ${materialWidth} мм</div>`;
+            
+            document.getElementById('result').innerHTML = html;
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
