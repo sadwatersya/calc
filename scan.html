@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор шаблонов</title>
+    <!-- Подключаем Tesseract.js v5 -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5.0.0/dist/tesseract.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 10px; 
+            background: #f0f2f5;
+            line-height: 1.4;
+        }
+        .container { 
+            max-width: 100%; 
+            background: white; 
+            padding: 15px; 
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e1e5e9;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            font-weight: 600;
+            color: #5f6368;
+            transition: all 0.3s;
+            text-align: center;
+            flex: 1;
+            min-width: 100px;
+            font-size: 14px;
+        }
+        .tab.active {
+            border-bottom-color: #1a73e8;
+            color: #1a73e8;
+            background: #f8f9fa;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        .input-group { 
+            margin-bottom: 12px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: 600;
+            color: #3c4043;
+            font-size: 13px;
+        }
+        input { 
+            width: 100%; 
+            padding: 10px; 
+            border: 2px solid #dadce0; 
+            border-radius: 6px; 
+            font-size: 14px;
+            background: white;
+        }
+        input:focus {
+            border-color: #1a73e8;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        .distance-info {
+            background: #e6f4ea;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+            line-height: 1.5;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0;
+        }
+        .distance-item {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+        }
+        .distance-label {
+            font-weight: 600;
+            color: #1e8e3e;
+            margin-bottom: 3px;
+            font-size: 13px;
+        }
+        .distance-value {
+            font-weight: 700;
+            color: #0d652d;
+            font-size: 15px;
+        }
+        .results-info {
+            background: #e8f0fe;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 17px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+        .auto-field {
+            background: #f0f7ff;
+            border: 1px dashed #1a73e8;
+        }
+        .start-button {
+            width: 100%; 
+            padding: 12px; 
+            background: #1a73e8; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 16px; 
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        .start-button:hover {
+            background: #1669d6;
+        }
+        .scan-button {
+            width: 100%; 
+            padding: 12px; 
+            background: #0d652d; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 16px; 
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        .scan-button:hover {
+            background: #0b5727;
+        }
+        .params-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #e1e5e9;
+            font-size: 14px;
+            line-height: 1.4;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+        .params-info {
+            flex: 1;
+        }
+        .difference-value {
+            font-weight: 700;
+            font-size: 22px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100%;
+            padding: 5px 0;
+            margin-left: 15px;
+        }
+        .difference-label {
+            font-weight: 700;
+            color: #1e8e3e;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .difference-value.positive {
+            color: #0d652d;
+        }
+        .difference-value.negative {
+            color: #d93025;
+        }
+        .difference-value.zero {
+            color: #1a73e8;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h3 {
+            margin: 0 0 15px 0;
+            color: #1a73e8;
+            text-align: center;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dadce0;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            background: white;
+        }
+        .modal-input:focus {
+            border-color: #1a73e8;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .modal-button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .modal-button.primary {
+            background: #1a73e8;
+            color: white;
+        }
+        .modal-button.secondary {
+            background: #f0f2f5;
+            color: #5f6368;
+        }
+        .step-indicator {
+            text-align: center;
+            color: #5f6368;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .version {
+            text-align: center;
+            color: #5f6368;
+            font-size: 10px;
+            margin-top: 15px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .input-row .input-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .two-column-results {
+            display: flex;
+            gap: 15px;
+        }
+        .results-column {
+            flex: 1;
+        }
+        .results-column .results-info {
+            margin: 0;
+            height: 100%;
+        }
+        
+        /* Скрытый input для загрузки файла */
+        .hidden-file-input {
+            display: none;
+        }
+        
+        /* Индикатор загрузки */
+        .loading-indicator {
+            text-align: center;
+            padding: 20px;
+            color: #5f6368;
+            font-size: 14px;
+            display: none;
+        }
+        
+        /* Окошко результата распознавания с возможностью редактирования */
+        .result-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+        }
+        .result-overlay.active {
+            display: flex;
+        }
+        .result-modal {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .result-header h3 {
+            margin: 0;
+            color: #1a73e8;
+        }
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #5f6368;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        .close-button:hover {
+            background: #f0f2f5;
+        }
+        .result-content {
+            margin-bottom: 20px;
+        }
+        .result-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+        }
+        .result-item-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #3c4043;
+        }
+        .edit-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dadce0;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-top: 5px;
+        }
+        .edit-input:focus {
+            border-color: #1a73e8;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('difference')">Шаблон</div>
+            <div class="tab" onclick="showTab('markup')">Разметка</div>
+        </div>
+
+        <div id="difference" class="tab-content active">
+            <div>
+                <button class="start-button" onclick="startParameterInput()">
+                    ВВЕСТИ ПАРАМЕТРЫ
+                </button>
+                
+                <button class="scan-button" onclick="startScanning()">
+                    СКАНИРОВАТЬ
+                </button>
+                
+                <input type="file" id="scanFileInput" class="hidden-file-input" accept="image/*">
+                
+                <div class="loading-indicator" id="loadingIndicator">
+                    <div>Идет распознавание...</div>
+                </div>
+                
+                <div class="params-display" id="paramsDisplay">
+                    Параметры не введены. Нажмите кнопку выше.
+                </div>
+                
+                <div class="distance-info" id="distanceInfo">
+                    <div class="distance-item">
+                        <div class="distance-label">Расстояние:</div>
+                        <div class="distance-value">-</div>
+                    </div>
+                    <div class="distance-item">
+                        <div class="distance-label">Угол:</div>
+                        <div class="distance-value">-</div>
+                    </div>
+                </div>
+                
+                <div class="two-column-results" id="differenceResultsContainer">
+                    <div class="results-column">
+                        <div class="results-info" id="differenceResultsLeft">
+                            Результаты появятся после ввода параметров
+                        </div>
+                    </div>
+                    <div class="results-column">
+                        <div class="results-info" id="differenceResultsRight"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="markup" class="tab-content">
+            <div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Отверстий в шаблоне:</label>
+                        <input type="number" id="holesInTemplate" value="11" step="1" onfocus="this.select();">
+                    </div>
+                    <div class="input-group">
+                        <label>Погрешность (мм):</label>
+                        <input type="number" id="tolerance" value="10.0" step="0.1" onfocus="this.select();">
+                    </div>
+                </div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Отверстий на ленте:</label>
+                        <input type="number" id="holesOnTape" value="0" step="1" class="auto-field" readonly>
+                    </div>
+                    <div class="input-group">
+                        <label>Проходов:</label>
+                        <input type="number" id="passes" value="0" step="0.1" class="auto-field" readonly>
+                    </div>
+                </div>
+                <div class="results-info" id="stepsResults">Введите количество отверстий в шаблоне</div>
+                <div class="results-info" id="runResults">Введите погрешность</div>
+            </div>
+        </div>
+
+        <div class="version">v16.6</div>
+    </div>
+
+    <div class="modal-overlay" id="parameterModal">
+        <div class="modal">
+            <h3 id="modalTitle">Введите параметры</h3>
+            <div class="step-indicator" id="stepIndicator">Шаг 1 из 4</div>
+            <input type="number" 
+                   id="modalInput" 
+                   class="modal-input" 
+                   step="0.1"
+                   placeholder="Введите значение"
+                   autofocus>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="cancelParameterInput()">Отмена</button>
+                <button class="modal-button primary" onclick="confirmParameterInput()">Далее</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окошко результата распознавания с возможностью редактирования -->
+    <div class="result-overlay" id="resultOverlay">
+        <div class="result-modal">
+            <div class="result-header">
+                <h3 id="resultTitle">Введите недостающие параметры</h3>
+                <button class="close-button" onclick="closeResultModal()">×</button>
+            </div>
+            <div class="result-content" id="resultContent">
+                <!-- Содержимое будет добавлено динамически -->
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeResultModal()">Отмена</button>
+                <button class="modal-button primary" onclick="applyManualInputs()">Применить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ТОЛЬКО пользовательские данные
+        let userParams = { radius: 0, arc: 0, holesCount: 0, edge: 0 };
+        let calculationTimeout = null;
+        let currentInputStep = 0;
+        const inputSteps = [
+            { title: "Введите внешний радиус (мм)", field: "radius", step: "0.1" },
+            { title: "Введите внешнюю дугу (мм)", field: "arc", step: "0.1" },
+            { title: "Введите количество отверстий", field: "holesCount", step: "1" },
+            { title: "Введите отступ от края (мм)", field: "edge", step: "0.1" }
+        ];
+
+        // Переменные для ручного ввода в модальном окне
+        let manualInputs = {};
+
+        // Функция для запуска сканирования
+        function startScanning() {
+            // Сбрасываем параметры перед новым сканированием
+            userParams = { radius: 0, arc: 0, holesCount: 0, edge: 0 };
+            manualInputs = {};
+            document.getElementById('scanFileInput').click();
+        }
+
+        // Обработчик выбора файла для сканирования
+        document.getElementById('scanFileInput').addEventListener('change', function(e) {
+            if (e.target.files.length) {
+                processImageForOCR(e.target.files[0]);
+            }
+        });
+
+        // Функция обработки изображения с помощью OCR
+        async function processImageForOCR(file) {
+            if (!file.type.match('image.*')) {
+                alert('Пожалуйста, выберите файл изображения (JPG, PNG, GIF, BMP)');
+                return;
+            }
+
+            try {
+                // Показываем индикатор загрузки
+                document.getElementById('loadingIndicator').style.display = 'block';
+                document.getElementById('paramsDisplay').innerHTML = 'Идет распознавание...';
+                
+                // Сбрасываем предыдущие значения
+                userParams = { radius: 0, arc: 0, holesCount: 0, edge: 0 };
+                manualInputs = {};
+                
+                // Создаем временный URL для изображения
+                const imageUrl = URL.createObjectURL(file);
+                
+                // Используем ПРОСТОЙ Tesseract API
+                const result = await Tesseract.recognize(
+                    imageUrl,
+                    'rus', // ТОЛЬКО русский язык
+                    {
+                        logger: m => console.log(m.status)
+                    }
+                );
+                
+                // Освобождаем URL
+                URL.revokeObjectURL(imageUrl);
+                
+                // Прячем индикатор загрузки
+                document.getElementById('loadingIndicator').style.display = 'none';
+                
+                // Парсим распознанный текст
+                parseOCRText(result.data.text);
+                
+            } catch (error) {
+                console.error('Ошибка распознавания:', error);
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('paramsDisplay').innerHTML = 'Ошибка при распознавании. Попробуйте другое изображение.';
+            }
+            
+            // Всегда сбрасываем input файла
+            document.getElementById('scanFileInput').value = '';
+        }
+
+        // Функция показа модального окна только с нераспознанными параметрами
+        function showMissingParamsModal(params) {
+            const paramNames = {
+                radius: 'Внешний радиус (мм)',
+                arc: 'Длина внешней дуги (мм)', 
+                holesCount: 'Количество отверстий (шт)',
+                edge: 'Отступ от края (мм)'
+            };
+            
+            let missingItemsHtml = '';
+            let missingCount = 0;
+            
+            // Формируем элементы только для нераспознанных параметров
+            for (const [param, name] of Object.entries(paramNames)) {
+                const found = params[param] && params[param] > 0;
+                
+                if (!found) {
+                    missingCount++;
+                    missingItemsHtml += `
+                        <div class="result-item">
+                            <div class="result-item-title">${name}</div>
+                            <input type="text" 
+                                   id="manual_${param}" 
+                                   class="edit-input" 
+                                   placeholder="Введите значение"
+                                   data-param="${param}">
+                        </div>
+                    `;
+                }
+            }
+            
+            // Если есть нераспознанные параметры - показываем окно
+            if (missingCount > 0) {
+                document.getElementById('resultTitle').textContent = `Введите ${missingCount} параметра`;
+                document.getElementById('resultContent').innerHTML = missingItemsHtml;
+                document.getElementById('resultOverlay').classList.add('active');
+                
+                // Фокусируемся на первом поле ввода
+                setTimeout(() => {
+                    const firstInput = document.querySelector('.edit-input');
+                    if (firstInput) {
+                        firstInput.focus();
+                        firstInput.select();
+                    }
+                }, 100);
+            } else {
+                // Все параметры распознаны - сразу применяем
+                updateParamsDisplay();
+                document.getElementById('holesOnTape').value = userParams.holesCount;
+                calculateDifference();
+                calculateSteps();
+                saveToStorage();
+            }
+        }
+
+        // Закрытие модального окна с результатами
+        function closeResultModal() {
+            document.getElementById('resultOverlay').classList.remove('active');
+        }
+
+        // Применение ручного ввода из модального окна
+        function applyManualInputs() {
+            // Собираем значения из всех полей ручного ввода
+            const paramsToCheck = ['radius', 'arc', 'holesCount', 'edge'];
+            let allValuesValid = true;
+            
+            for (const param of paramsToCheck) {
+                const manualInput = document.getElementById(`manual_${param}`);
+                if (manualInput) {
+                    const value = manualInput.value.trim();
+                    if (value) {
+                        // Убираем пробелы в числах
+                        const cleanValue = value.replace(/\s/g, '').replace(',', '.');
+                        
+                        if (param === 'holesCount') {
+                            const intValue = parseInt(cleanValue);
+                            if (!isNaN(intValue) && intValue > 0) {
+                                userParams[param] = intValue;
+                            } else {
+                                allValuesValid = false;
+                                manualInput.style.borderColor = '#d93025';
+                            }
+                        } else {
+                            const floatValue = parseFloat(cleanValue);
+                            if (!isNaN(floatValue) && floatValue > 0) {
+                                userParams[param] = floatValue;
+                            } else {
+                                allValuesValid = false;
+                                manualInput.style.borderColor = '#d93025';
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (allValuesValid) {
+                closeResultModal();
+                updateParamsDisplay();
+                document.getElementById('holesOnTape').value = userParams.holesCount;
+                calculateDifference();
+                calculateSteps();
+                saveToStorage();
+            } else {
+                alert('Пожалуйста, введите корректные числовые значения.');
+            }
+        }
+
+        // Функция парсинга распознанного текста
+        function parseOCRText(text) {
+            console.log('Парсинг текста:', text);
+            
+            // Сбрасываем параметры перед парсингом нового текста
+            userParams = { radius: 0, arc: 0, holesCount: 0, edge: 0 };
+            manualInputs = {};
+            
+            // ТОЧНЫЕ ПАТТЕРНЫ
+            const patterns = {
+                radius: /радиус внешний, мм[:\s]*([\d\s,.]+)/i,
+                arc: /длина внешней дуги, мм[:\s]*([\d\s,.]+)/i,
+                holesCount: /количество отверстий, шт[:\s]*([\d\s,.]+)/i,
+                edge: /отступ от края, мм[:\s]*([\d\s,.]+)/i
+            };
+            
+            // Ищем ТОЧНЫЕ паттерны
+            for (const [param, pattern] of Object.entries(patterns)) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    // Убираем все пробелы между цифрами и заменяем запятую на точку
+                    let valueStr = match[1].replace(/\s/g, '').replace(',', '.');
+                    
+                    // Проверяем, что строка не пустая и содержит цифры
+                    if (valueStr && /\d/.test(valueStr)) {
+                        const value = param === 'holesCount' ? parseInt(valueStr) : parseFloat(valueStr);
+                        
+                        // Проверяем корректность значения
+                        if (!isNaN(value) && value > 0) {
+                            userParams[param] = value;
+                            console.log(`✓ Найден параметр ${param}: ${value} (из строки: "${match[1]}")`);
+                        }
+                    }
+                }
+            }
+            
+            console.log('Итог распознавания:', userParams);
+            
+            // Показываем модальное окно только с нераспознанными параметрами
+            showMissingParamsModal(userParams);
+        }
+
+        // ТОЛЬКО ЭТО сохраняем - что ввел пользователь
+        function saveToStorage() {
+            const data = {
+                userParams: userParams,
+                holesInTemplate: document.getElementById('holesInTemplate').value,
+                tolerance: document.getElementById('tolerance').value
+            };
+            localStorage.setItem('templateCalculatorData', JSON.stringify(data));
+        }
+
+        // При загрузке восстанавливаем ТОЛЬКО введенные данные
+        function loadFromStorage() {
+            const saved = localStorage.getItem('templateCalculatorData');
+            if (saved) {
+                const data = JSON.parse(saved);
+                
+                if (data.userParams) {
+                    userParams = data.userParams;
+                }
+                
+                if (data.holesInTemplate) document.getElementById('holesInTemplate').value = data.holesInTemplate;
+                if (data.tolerance) document.getElementById('tolerance').value = data.tolerance;
+                
+                if (userParams.radius && userParams.arc && userParams.holesCount && userParams.edge) {
+                    updateParamsDisplay();
+                    document.getElementById('holesOnTape').value = userParams.holesCount;
+                    calculateDifference();
+                    calculateSteps();
+                    calculateRun();
+                }
+            }
+        }
+
+        // Функции расчета
+        function calculateDifferenceValue() {
+            if (!userParams.radius || !userParams.arc) return 0;
+            
+            const variants = [
+                userParams.radius * 2 * Math.PI,
+                userParams.radius * Math.PI,
+                userParams.radius * Math.PI / 2,
+                userParams.radius * 2 * Math.PI / 3,
+                userParams.radius * 2 * Math.PI / 6
+            ];
+            
+            const closest = variants.reduce((prev, curr) => 
+                Math.abs(curr - userParams.arc) < Math.abs(prev - userParams.arc) ? curr : prev
+            );
+            return Math.round(userParams.arc - closest);
+        }
+
+        function getColorClass(value) {
+            if (value > 0) return 'positive';
+            if (value < 0) return 'negative';
+            return 'zero';
+        }
+
+        function preciseRound(num, decimals) {
+            return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+        }
+
+        function updateParamsDisplay() {
+            const display = document.getElementById('paramsDisplay');
+            if (userParams.radius && userParams.arc && userParams.holesCount && userParams.edge) {
+                const diffValue = calculateDifferenceValue();
+                const colorClass = getColorClass(diffValue);
+                
+                display.innerHTML = `
+                    <div class="params-info">
+                        • Внешний радиус: <strong>${userParams.radius}</strong> мм<br>
+                        • Внешняя дуга: <strong>${userParams.arc}</strong> мм<br>
+                        • Количество отверстий: <strong>${userParams.holesCount}</strong><br>
+                        • Отступ от края: <strong>${userParams.edge}</strong> мм
+                    </div>
+                    <div class="difference-value ${colorClass}">
+                        <div class="difference-label">РАЗНИЦА</div>
+                        <div id="differenceValue"><strong>${diffValue} мм</strong></div>
+                    </div>
+                `;
+            } else {
+                display.innerHTML = 'Параметры не введены. Нажмите кнопку выше.';
+            }
+        }
+
+        function calculateDistance() {
+            if (!userParams.radius || !userParams.arc || !userParams.holesCount || !userParams.edge) {
+                document.querySelectorAll('.distance-value').forEach(el => el.textContent = '-');
+                return 0;
+            }
+            
+            const distanceOnOuterEdge = userParams.arc / userParams.holesCount;
+            const effectiveRadius = userParams.radius - userParams.edge;
+            
+            if (effectiveRadius <= 0) {
+                document.querySelectorAll('.distance-value').forEach(el => el.textContent = 'Ошибка');
+                return 0;
+            }
+            
+            return distanceOnOuterEdge * (effectiveRadius / userParams.radius);
+        }
+
+        function calculateDifference() {
+            if (!userParams.radius || !userParams.arc || !userParams.holesCount || !userParams.edge) {
+                document.getElementById('differenceResultsLeft').textContent = 'Введите параметры для расчета';
+                document.getElementById('differenceResultsRight').textContent = '';
+                document.querySelectorAll('.distance-value').forEach(el => el.textContent = '-');
+                return;
+            }
+            
+            const distance = calculateDistance();
+            const diffValue = calculateDifferenceValue();
+            const angle = Math.round((userParams.arc * (180 / Math.PI)) / userParams.radius);
+            
+            document.querySelectorAll('.distance-value')[0].innerHTML = `<strong>${preciseRound(distance, 1)} мм</strong>`;
+            document.querySelectorAll('.distance-value')[1].innerHTML = `<strong>${angle}°</strong>`;
+            
+            const diffElement = document.getElementById('differenceValue');
+            if (diffElement) diffElement.innerHTML = `<strong>${diffValue} мм</strong>`;
+            
+            const diffContainer = document.querySelector('.difference-value');
+            if (diffContainer) diffContainer.className = `difference-value ${getColorClass(diffValue)}`;
+            
+            const effectiveRadius = userParams.radius - userParams.edge;
+            if (effectiveRadius <= 0) {
+                document.getElementById('differenceResultsLeft').textContent = 'Ошибка: радиус должен быть больше отступа';
+                return;
+            }
+            
+            let templateResults = [];
+            const TARGET_VALUE = 1300;
+            
+            for (let i = 1; i <= 50; i++) {
+                const currentArc = distance * i;
+                const templateAngle = currentArc / effectiveRadius / 2;
+                const result = 2 * effectiveRadius * Math.sin(templateAngle);
+                const roundedResult = preciseRound(result, 1);
+                
+                templateResults.push({ index: i, value: roundedResult });
+                
+                if (roundedResult >= TARGET_VALUE) break;
+            }
+            
+            const middleIndex = Math.ceil(templateResults.length / 2);
+            const leftColumn = templateResults.slice(0, middleIndex);
+            const rightColumn = templateResults.slice(middleIndex);
+            
+            document.getElementById('differenceResultsLeft').textContent = 
+                leftColumn.map(item => `${item.index}. ${item.value}`).join('\n');
+            document.getElementById('differenceResultsRight').textContent = 
+                rightColumn.map(item => `${item.index}. ${item.value}`).join('\n');
+            
+            saveToStorage();
+        }
+
+        function calculateSteps() {
+            clearTimeout(calculationTimeout);
+            
+            calculationTimeout = setTimeout(() => {
+                const holesOnTape = userParams.holesCount || 0;
+                const holesInTemplate = parseInt(document.getElementById('holesInTemplate').value) || 0;
+                
+                if (holesInTemplate <= 0) {
+                    document.getElementById('stepsResults').textContent = 'Введите количество отверстий в шаблоне';
+                    document.getElementById('passes').value = '0';
+                    return;
+                }
+                
+                if (holesOnTape <= 0) {
+                    document.getElementById('stepsResults').textContent = 'Сначала введите параметры в разделе "Шаблон"';
+                    document.getElementById('passes').value = '0';
+                    return;
+                }
+                
+                const steps = [];
+                let currentValue = holesInTemplate;
+                
+                for (let i = 0; i < 1000 && currentValue <= holesOnTape; i++) {
+                    steps.push(currentValue.toString());
+                    currentValue += (holesInTemplate - 1);
+                }
+                
+                const ratio = (holesOnTape / (holesInTemplate - 1)).toFixed(1);
+                steps.push('(' + ratio + ')');
+                
+                document.getElementById('passes').value = ratio;
+                document.getElementById('stepsResults').textContent = steps.join('  ');
+                
+                calculateRun();
+                saveToStorage();
+            }, 100);
+        }
+
+        function calculateRun() {
+            const tolerance = parseFloat(document.getElementById('tolerance').value) || 0;
+            const passes = parseFloat(document.getElementById('passes').value) || 0;
+            
+            if (tolerance <= 0 || passes <= 0) {
+                document.getElementById('runResults').textContent = 'Введите погрешность и убедитесь, что проходы рассчитаны';
+                return;
+            }
+            
+            const step = tolerance / passes;
+            const values = [];
+            
+            for (let i = 1; i <= passes; i++) {
+                values.push(preciseRound(step * i, 1));
+            }
+            
+            document.getElementById('runResults').textContent = values.join('   ');
+            saveToStorage();
+        }
+
+        // Функции модального окна
+        function startParameterInput() {
+            currentInputStep = 0;
+            showInputStep();
+        }
+
+        function showInputStep() {
+            const step = inputSteps[currentInputStep];
+            document.getElementById('modalTitle').textContent = step.title;
+            document.getElementById('stepIndicator').textContent = `Шаг ${currentInputStep + 1} из 4`;
+            document.getElementById('modalInput').value = '';
+            document.getElementById('modalInput').step = step.step;
+            
+            document.getElementById('parameterModal').classList.add('active');
+            
+            setTimeout(() => {
+                const input = document.getElementById('modalInput');
+                input.focus();
+                input.select();
+            }, 100);
+        }
+
+        function confirmParameterInput() {
+            const input = document.getElementById('modalInput');
+            const value = input.value.trim();
+            
+            if (!value) {
+                alert('Пожалуйста, введите значение');
+                input.focus();
+                return;
+            }
+            
+            const numericValue = parseFloat(value);
+            if (isNaN(numericValue) || numericValue <= 0) {
+                alert('Пожалуйста, введите корректное число');
+                input.focus();
+                return;
+            }
+            
+            userParams[inputSteps[currentInputStep].field] = numericValue;
+            
+            currentInputStep++;
+            if (currentInputStep < 4) {
+                showInputStep();
+            } else {
+                document.getElementById('parameterModal').classList.remove('active');
+                completeParameterInput();
+            }
+        }
+
+        function cancelParameterInput() {
+            document.getElementById('parameterModal').classList.remove('active');
+            currentInputStep = 0;
+        }
+
+        function completeParameterInput() {
+            updateParamsDisplay();
+            document.getElementById('holesOnTape').value = userParams.holesCount;
+            calculateDifference();
+            calculateSteps();
+            saveToStorage();
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+            saveToStorage();
+        }
+
+        // Инициализация
+        window.onload = function() {
+            loadFromStorage();
+            
+            document.getElementById('holesInTemplate').addEventListener('input', () => {
+                clearTimeout(calculationTimeout);
+                calculationTimeout = setTimeout(calculateSteps, 500);
+            });
+            
+            document.getElementById('tolerance').addEventListener('input', () => {
+                clearTimeout(calculationTimeout);
+                calculationTimeout = setTimeout(calculateRun, 500);
+            });
+            
+            document.getElementById('modalInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') confirmParameterInput();
+            });
+            
+            window.addEventListener('beforeunload', saveToStorage);
+        };
+    </script>
+</body>
+</html>
