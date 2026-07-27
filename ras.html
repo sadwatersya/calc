@@ -236,8 +236,15 @@
             }
             
             // Припуски
-            width = Math.ceil((width + 90) / 100) * 100;
-            length = Math.ceil((length + 150) / 100) * 100;
+            width = Math.ceil((width + 60) / 100) * 100;
+            length = Math.ceil((length + 120) / 100) * 100;
+            
+            // Дополнительное условие: если ширина меньше 1900 для 2000 мм или меньше 2900 для 3000 мм, добавляем 100
+            if (selectedWidth === 2000 && width <= 1900) {
+                width += 100;
+            } else if (selectedWidth === 3000 && width <= 2900) {
+                width += 100;
+            }
             
             return { width, length };
         }
