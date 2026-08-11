@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка геометрии поворотной ленты</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg0:#071527; --bg1:#0c2340;
+    --line:rgba(126,190,255,.16);
+    --ink:#e9f3ff; --mut:#8fb0d4;
+    --cyan:#5ac8ff; --green:#38e08c; --red:#ff5c5c; --amber:#ffc24d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{height:100%}
+  body{
+    font-family:"Golos Text",system-ui,sans-serif;
+    color:var(--ink);
+    background:linear-gradient(160deg,var(--bg0),var(--bg1) 60%,#081a30);
+  }
+  ::selection{background:rgba(255,194,77,.35)}
+
+  /* ---------- статичный фон ---------- */
+  .bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+  .grid{position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(126,190,255,.05) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(126,190,255,.05) 1px,transparent 1px),
+      linear-gradient(rgba(126,190,255,.10) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(126,190,255,.10) 1px,transparent 1px);
+    background-size:44px 44px,44px 44px,220px 220px,220px 220px;
+  }
+  .ring{position:absolute;opacity:.6}
+  .ring-a{width:640px;height:640px;top:-190px;right:-170px}
+  .ring-b{width:800px;height:800px;left:-260px;bottom:-300px}
+
+  /* ---------- заголовок по центру ---------- */
+  header{position:relative;z-index:2;display:flex;justify-content:center;
+    padding:14px 20px;border-bottom:1px solid var(--line)}
+  .page-title{font-family:Unbounded;font-weight:700;letter-spacing:.12em;
+    font-size:clamp(.95rem,2.2vw,1.5rem);text-align:center;text-transform:uppercase}
+
+  /* ---------- сцена ---------- */
+  main{position:relative;z-index:1;max-width:1280px;margin:0 auto;
+    padding:10px 36px 18px;min-height:calc(100dvh - 58px);
+    display:flex;flex-direction:column;justify-content:center}
+
+  /* ---------- результат: две колонки ---------- */
+  .r-layout{display:grid;grid-template-columns:auto 1fr;gap:56px;align-items:center;max-width:1100px}
+  .verdict{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+  .v-icon{width:84px;height:84px}
+  .v-icon circle,.v-icon path{fill:none;stroke-width:8;stroke-linecap:round}
+  .verdict.ok .v-icon circle,.verdict.ok .v-icon path{stroke:var(--green)}
+  .verdict.bad .v-icon circle,.verdict.bad .v-icon path{stroke:var(--red)}
+  .v-word{font-family:Unbounded;font-weight:900;line-height:1}
+  .verdict.ok .v-word{font-size:clamp(3rem,7vw,5.2rem);color:var(--green)}
+  .verdict.bad .v-word{font-size:clamp(1.7rem,4vw,2.8rem);color:var(--red)}
+  .v-delta{font-family:"JetBrains Mono";font-weight:800;font-size:1.5rem}
+  .verdict.ok .v-delta{color:var(--mut);font-size:1.05rem}
+  .verdict.bad .v-delta{color:var(--red)}
+  .v-sub{color:var(--mut);font-size:.88rem}
+  #btnRestart{margin-top:16px}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .chip{font-family:"JetBrains Mono";font-size:.75rem;padding:5px 10px;border:1px solid var(--line);
+    border-radius:8px;color:var(--mut)}
+  .chip b{color:var(--ink)}
+  .stats{border-top:1px solid var(--line)}
+  .stats h3{font-family:Unbounded;font-size:.75rem;letter-spacing:.14em;color:var(--mut);
+    text-transform:uppercase;padding:10px 0 2px}
+  .srow{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:14px;
+    padding:7px 0;border-bottom:1px solid var(--line)}
+  .s-l{font-size:.88rem}
+  .s-v{font-family:"JetBrains Mono";font-weight:800;font-size:.98rem;color:var(--cyan);text-align:right;min-width:110px}
+  .srow.hl .s-v{color:var(--amber);font-size:1.15rem}
+  .srow.hl.bad .s-v{color:var(--red)}
+
+  /* ---------- кнопки ---------- */
+  .btn{font-family:"Golos Text";font-weight:700;font-size:.9rem;border-radius:10px;cursor:pointer;
+    padding:10px 22px;border:1px solid transparent}
+  .btn.primary{background:var(--amber);color:#221602}
+  .btn.primary:hover{background:#ffd27a}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--cyan)}
+  .btn.ghost:hover{background:rgba(90,200,255,.08)}
+  .btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  /* ---------- модальные окна ---------- */
+  .overlay{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;
+    background:rgba(4,12,24,.72);
+    opacity:0;pointer-events:none}
+  .overlay.show{opacity:1;pointer-events:auto}
+  .modal{width:min(470px,94vw);position:relative;
+    background:linear-gradient(180deg,#132c50,#0d1f36);
+    border:1px solid rgba(140,200,255,.24);border-radius:18px;
+    padding:26px 28px 24px}
+  .modal-top{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+  .pring{width:52px;height:52px;flex:none}
+  .pring .track{fill:none;stroke:rgba(126,190,255,.18);stroke-width:4}
+  .pring .bar{fill:none;stroke:var(--amber);stroke-width:4;stroke-linecap:round;
+    stroke-dasharray:138.23;transform:rotate(-90deg);transform-origin:center}
+  .pring text{font-family:"JetBrains Mono";font-weight:800;font-size:14px;fill:var(--ink)}
+  #stepBadge{display:block;font-family:"JetBrains Mono";font-weight:800;font-size:.7rem;
+    letter-spacing:.26em;color:var(--amber)}
+  #stepNote{display:block;font-size:.82rem;color:var(--mut);margin-top:3px}
+  .modal-title{font-family:Unbounded;font-weight:700;font-size:1.4rem;margin-bottom:16px}
+  .input-row{display:flex;align-items:baseline;gap:12px;background:#0a1930;
+    border:1.5px solid rgba(140,200,255,.28);border-radius:13px;padding:13px 16px}
+  .input-row:focus-within{border-color:var(--amber)}
+  .modal.err .input-row{border-color:var(--red)}
+  #mInput{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--ink);
+    font-family:"JetBrains Mono";font-weight:800;font-size:1.7rem;caret-color:var(--amber)}
+  #mInput::placeholder{color:rgba(143,176,212,.35)}
+  .unit{font-family:"JetBrains Mono";color:var(--mut);font-size:1rem}
+  .hint{font-family:"JetBrains Mono";font-size:.76rem;color:var(--mut);margin-top:10px}
+  .hint.bad{color:var(--red)}
+  .actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+
+  @media(max-width:900px){
+    .r-layout{grid-template-columns:1fr;gap:24px}
+    main{padding:10px 20px 24px}
+  }
+</style>
+</head>
+<body>
+
+<!-- статичный фон -->
+<div class="bg" aria-hidden="true">
+  <div class="grid"></div>
+  <svg class="ring ring-a" viewBox="0 0 600 600" fill="none">
+    <circle cx="300" cy="300" r="292" stroke="rgba(122,192,255,.22)" stroke-width="1.5" stroke-dasharray="2 12"/>
+    <circle cx="300" cy="300" r="236" stroke="rgba(122,192,255,.10)"/>
+    <circle cx="300" cy="300" r="172" stroke="rgba(255,194,77,.14)" stroke-dasharray="1 9"/>
+  </svg>
+  <svg class="ring ring-b" viewBox="0 0 600 600" fill="none">
+    <circle cx="300" cy="300" r="290" stroke="rgba(122,192,255,.14)" stroke-dasharray="4 16"/>
+    <circle cx="300" cy="300" r="204" stroke="rgba(56,224,140,.10)" stroke-dasharray="1 8"/>
+  </svg>
+</div>
+
+<header>
+  <h1 class="page-title">Проверка геометрии поворотной ленты</h1>
+</header>
+
+<main>
+  <!-- результат (появляется только после ввода всех данных) -->
+  <div id="result" hidden>
+    <div class="r-layout">
+      <div class="verdict" id="verdict">
+        <svg class="v-icon" viewBox="0 0 120 120">
+          <g id="icoOk" hidden>
+            <circle cx="60" cy="60" r="52"/>
+            <path d="M38 62 L54 78 L84 44"/>
+          </g>
+          <g id="icoBad" hidden>
+            <circle cx="60" cy="60" r="52"/>
+            <path d="M43 43 L77 77"/>
+            <path d="M77 43 L43 77"/>
+          </g>
+        </svg>
+        <div class="v-word" id="vWord"></div>
+        <div class="v-delta" id="vDelta"></div>
+        <div class="v-sub" id="vSub"></div>
+        <div><button class="btn primary" id="btnRestart">↻ Пересчитать&nbsp; (Enter)</button></div>
+      </div>
+
+      <div>
+        <div class="chips" id="chips"></div>
+        <div class="stats">
+          <h3>Ход расчёта</h3>
+          <div id="statRows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- кастомные окна ввода -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal">
+    <div class="modal-top">
+      <svg class="pring" viewBox="0 0 56 56">
+        <circle class="track" cx="28" cy="28" r="22"/>
+        <circle class="bar" id="pringBar" cx="28" cy="28" r="22" stroke-dashoffset="138.23"/>
+        <text id="pringTxt" x="28" y="33" text-anchor="middle">1/4</text>
+      </svg>
+      <div>
+        <span id="stepBadge">ШАГ 1 / 4</span>
+        <span id="stepNote">R₁ — радиус внешней окружности</span>
+      </div>
+    </div>
+
+    <h2 class="modal-title" id="mTitle">Внешний радиус</h2>
+
+    <form id="mForm" autocomplete="off">
+      <div class="input-row">
+        <input id="mInput" inputmode="decimal" placeholder="например 250" autofocus>
+        <span class="unit">мм</span>
+      </div>
+      <p class="hint" id="mHint">Введите число и нажмите Enter ↵</p>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="btnBack" hidden>← Назад</button>
+        <span></span>
+        <button type="submit" class="btn primary" id="btnNext">Далее ↵</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const DEG = 180 / Math.PI;
+
+  const STEPS = [
+    { key:'R1', title:'Внешний радиус',    note:'R₁ — радиус внешней окружности' },
+    { key:'R2', title:'Внутренний радиус', note:'R₂ — радиус внутренней окружности' },
+    { key:'L1', title:'Внешняя дуга',      note:'L₁ — длина внешней дуги' },
+    { key:'L2', title:'Внутренняя дуга',   note:'L₂ — длина внутренней дуги' }
+  ];
+
+  const vals = {}, raw = {};
+  let idx = 0, resultShown = false;
+
+  const $ = id => document.getElementById(id);
+  const overlay = $('overlay'), modal = $('modal'), inp = $('mInput'),
+        hint = $('mHint'), pringBar = $('pringBar'), pringTxt = $('pringTxt');
+
+  const fmt = n => n.toLocaleString('ru-RU', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const signed = n => (n > 0 ? '+' : '') + fmt(n);
+  const parseNum = s => Number(String(s).trim().replace(',', '.'));
+
+  function renderStep() {
+    const st = STEPS[idx];
+    $('stepBadge').textContent = `ШАГ ${idx+1} / 4`;
+    $('stepNote').textContent = st.note;
+    $('mTitle').textContent = st.title;
+    pringBar.style.strokeDashoffset = 138.23 * (1 - (idx+1)/4);
+    pringTxt.textContent = `${idx+1}/4`;
+    inp.value = raw[st.key] || '';
+    $('btnBack').hidden = idx === 0;
+    clearError();
+    setTimeout(() => { inp.focus(); inp.select(); }, 30);
+  }
+
+  function showError(msg) {
+    hint.textContent = msg;
+    hint.classList.add('bad');
+    modal.classList.add('err');
+    inp.focus();
+  }
+  function clearError() {
+    hint.textContent = 'Введите число и нажмите Enter ↵';
+    hint.classList.remove('bad');
+    modal.classList.remove('err');
+  }
+
+  function submit() {
+    const st = STEPS[idx];
+    const n = parseNum(inp.value);
+    if (!isFinite(n) || n <= 0) { showError('Нужно положительное число, например 250 или 12,5'); return; }
+    vals[st.key] = n; raw[st.key] = inp.value.trim();
+    if (idx < 3) { idx++; renderStep(); } else finish();
+  }
+
+  function finish() {
+    const { R1, R2, L1, L2 } = vals;
+    const a1   = L1 / R1 * DEG;      // внешний угол
+    const a2   = L2 / R2 * DEG;      // внутренний угол
+    const avg  = (a1 + a2) / 2;      // средний угол
+    const nL1  = R1 * avg / DEG;     // новая внешняя дуга
+    const nL2  = R2 * avg / DEG;     // новая внутренняя дуга
+    const diff = L1 - nL1;
+    const ok   = Math.abs(diff) <= 15;
+
+    overlay.classList.remove('show');
+    $('result').hidden = false;
+    resultShown = true;
+
+    const v = $('verdict');
+    v.classList.toggle('ok', ok);
+    v.classList.toggle('bad', !ok);
+    $('icoOk').hidden = !ok;
+    $('icoBad').hidden = ok;
+
+    $('vWord').textContent = ok ? 'OK' : 'ВНЕ ДОПУСКА';
+    $('vDelta').textContent = `ΔL = ${signed(diff)} мм`;
+    $('vSub').textContent = ok
+      ? 'Разница в пределах допуска ±15 мм'
+      : 'Разница вышла за пределы допуска ±15 мм';
+
+    $('chips').innerHTML =
+      `<span class="chip">R₁ = <b>${fmt(R1)}</b></span>`+
+      `<span class="chip">R₂ = <b>${fmt(R2)}</b></span>`+
+      `<span class="chip">L₁ = <b>${fmt(L1)}</b></span>`+
+      `<span class="chip">L₂ = <b>${fmt(L2)}</b></span>`;
+
+    $('statRows').innerHTML = [
+      ['Внешний угол α₁', fmt(a1)+'°'],
+      ['Внутренний угол α₂', fmt(a2)+'°'],
+      ['Средний угол α̅', fmt(avg)+'°'],
+      ['Новая внешняя дуга L₁′', fmt(nL1)+' мм'],
+      ['Новая внутренняя дуга L₂′', fmt(nL2)+' мм']
+    ].map(s => `<div class="srow"><span class="s-l">${s[0]}</span><b class="s-v">${s[1]}</b></div>`).join('')
+      + `<div class="srow hl ${ok?'':'bad'}"><span class="s-l">Разница ΔL = L₁ − L₁′</span><b class="s-v">${signed(diff)} мм</b></div>`;
+  }
+
+  function restart() {
+    Object.keys(vals).forEach(k => { delete vals[k]; delete raw[k]; });
+    idx = 0; resultShown = false;
+    $('result').hidden = true;
+    overlay.classList.add('show');
+    renderStep();
+  }
+
+  $('mForm').addEventListener('submit', e => { e.preventDefault(); submit(); });
+  $('btnBack').addEventListener('click', () => { if (idx > 0) { idx--; renderStep(); } });
+  $('btnRestart').addEventListener('click', restart);
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (resultShown) { e.preventDefault(); restart(); }
+    else if (overlay.classList.contains('show') && document.activeElement !== inp) { e.preventDefault(); submit(); }
+  });
+
+  window.addEventListener('load', () => {
+    renderStep();
+    overlay.classList.add('show');
+  });
+})();
+</script>
+</body>
+</html>
