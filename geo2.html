@@ -228,6 +228,29 @@
   .modal-input::-webkit-outer-spin-button,
   .modal-input::-webkit-inner-spin-button {-webkit-appearance:none;margin:0}
 
+  #toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--ok);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 300;
+    pointer-events: none;
+    text-align: center;
+  }
+  #toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
   @media (max-width:720px){
     #btnAddPoi{top:8px;height:42px;font-size:12px;}
     #btnPoiToggle{top:8px;right:8px;width:42px;height:42px;font-size:13px;}
@@ -291,6 +314,7 @@
 </div>
 
 <button id="btnScaleOk">ОК</button>
+<div id="toast"></div>
 
 <div id="resizeModal" class="modal">
   <div class="modal-content">
@@ -382,6 +406,13 @@
   const btnPoiToggle = $('btnPoiToggle');
   const poiPanel = $('poiPanel');
   const btnScaleOk = $('btnScaleOk');
+  const toastEl = $('toast');
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 3500);
+  }
 
   function mPerDegLon(lat) { return 111320 * Math.cos(lat * Math.PI / 180); }
 
@@ -790,6 +821,7 @@
       
       const deg = Math.round(state.northAngle * 180 / Math.PI);
       setStatus(`Север откалиброван. Угол поворота: ${deg}°.\nВсе расстояния теперь учитывают ориентацию карты.`);
+      showToast(`🧭 Север откалиброван (${deg}°)`);
       
       if (watchId === null) {
         startGpsWatch();
@@ -1155,6 +1187,7 @@
 
   btnCalibrate.addEventListener('click', () => {
     if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
+    if (!state.scale) { setStatus('Сначала задайте масштаб (📏).'); return; }
     if (!state.ref) { setStatus('Сначала укажите ваше положение (📍).'); return; }
     if (!navigator.geolocation) { setStatus('Геолокация не поддерживается.'); return; }
     
