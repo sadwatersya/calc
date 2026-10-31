@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Карта + GPS</title>
+<style>
+  :root{
+    --bg:#16181d; --panel:#23262e; --panel2:#2c303a; --line:#3a3f4b;
+    --text:#e9ecf1; --dim:#98a0ae; --accent:#3d8bfd; --warn:#ffb020; --ok:#28c76f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none}
+  #app{display:flex;flex-direction:column;height:100%}
+
+  #menuToggle{
+    position:fixed;top:10px;left:10px;z-index:100;
+    width:44px;height:44px;border-radius:12px;
+    background:rgba(35,38,46,.92);border:1px solid var(--line);
+    color:var(--text);font-size:20px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.45);
+    transition:.2s;
+  }
+  #menuToggle:active{transform:scale(.94)}
+
+  #menuOverlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;
+    opacity:0;pointer-events:none;transition:opacity .22s;
+  }
+  #menuOverlay.open{opacity:1;pointer-events:auto}
+
+  #toolbar{
+    position:fixed;top:0;left:0;bottom:0;width:280px;max-width:82vw;
+    display:flex;flex-direction:column;align-items:stretch;gap:8px;
+    padding:64px 12px 16px;background:var(--panel);
+    border-right:1px solid var(--line);z-index:95;
+    transform:translateX(-100%);transition:transform .24s cubic-bezier(.4,0,.2,1);
+    overflow-y:auto;
+  }
+  #toolbar.open{transform:translateX(0)}
+
+  .btn{
+    display:flex;align-items:center;gap:10px;width:100%;
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;cursor:pointer;font-size:14px;
+    user-select:none;white-space:nowrap;transition:.15s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.accent{border-color:#2f6fbf}
+  .field{
+    display:flex;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px;color:var(--dim);
+  }
+  .field input{
+    flex:1;min-width:0;background:transparent;border:0;color:var(--text);
+    font:inherit;outline:none;padding:2px 0;
+  }
+  .field input::-webkit-outer-spin-button,
+  .field input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  #maparea{position:relative;flex:1 1 auto;overflow:hidden;background:#0f1115}
+  #viewport{
+    position:absolute;inset:0;overflow:hidden;touch-action:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:40px 40px;
+  }
+  #viewport.mode-scale,#viewport.mode-poi,#viewport.mode-position{cursor:crosshair}
+
+  #world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform}
+  #mapimg{display:block;width:100%;height:100%;-webkit-user-drag:none;pointer-events:none}
+  #overlay{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+  #markers{position:absolute;left:0;top:0;pointer-events:none}
+
+  .marker{position:absolute;width:0;height:0;transform-origin:0 0}
+  .marker .pin{
+    position:absolute;left:0;top:0;transform:translate(-50%,-50%);
+    width:16px;height:16px;border-radius:50%;border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.65);
+  }
+  .marker.poi .pin{background:var(--warn)}
+  .marker.me .pin{background:var(--accent);width:18px;height:18px}
+  .marker.me .pulse{
+    position:absolute;left:0;top:0;transform:translate(-50%,-50%);
+    width:18px;height:18px;border-radius:50%;background:rgba(61,139,253,.55);
+    animation:pulse 2s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%{transform:translate(-50%,-50%) scale(1);opacity:.75}
+    100%{transform:translate(-50%,-50%) scale(3.6);opacity:0}
+  }
+  .marker .label{
+    position:absolute;left:0;top:11px;transform:translateX(-50%);
+    background:rgba(10,12,16,.82);border:1px solid rgba(255,255,255,.12);
+    color:#fff;font-size:11px;line-height:1.25;padding:2px 6px;border-radius:5px;
+    white-space:nowrap;text-align:center;backdrop-filter:blur(4px);
+  }
+  .marker .label .d{color:#8fc4ff;font-weight:600}
+
+  #poiPanel{
+    position:absolute;top:10px;right:10px;width:230px;max-height:calc(100% - 90px);
+    display:flex;flex-direction:column;background:rgba(28,31,38,.92);
+    border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px);
+    z-index:15;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  #poiPanel .panel-title{
+    padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--dim);border-bottom:1px solid var(--line);flex:0 0 auto;
+  }
+  #poiList{overflow-y:auto;padding:4px}
+  #poiList .empty{padding:10px;color:var(--dim);font-size:12.5px;text-align:center}
+  .poi-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13px}
+  .poi-row .poi-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .poi-row .poi-dist{color:#8fc4ff;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .poi-row .del{
+    background:transparent;border:0;color:#7d8494;cursor:pointer;font-size:14px;
+    padding:0 2px;line-height:1;border-radius:4px;
+  }
+
+  #status{
+    position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);
+    background:rgba(20,22,28,.9);border:1px solid var(--line);border-radius:9px;
+    padding:8px 12px;font-size:12.5px;line-height:1.45;color:#cfd5e0;
+    white-space:pre-line;z-index:15;backdrop-filter:blur(6px);
+    box-shadow:0 6px 18px rgba(0,0,0,.4);pointer-events:none;
+  }
+
+  #hint{
+    position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;color:var(--dim);font-size:15px;
+    text-align:center;padding:20px;pointer-events:none;
+  }
+  #hint .big{font-size:38px;opacity:.5}
+
+  @media (max-width:720px){
+    #poiPanel{width:170px;max-height:42%;top:62px}
+    #status{bottom:8px;font-size:11.5px;padding:6px 9px;left:8px;right:8px;max-width:none}
+    #menuToggle{top:8px;left:8px;width:42px;height:42px;font-size:18px}
+    #toolbar{padding-top:58px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <button id="menuToggle" aria-label="Меню">☰</button>
+  <div id="menuOverlay"></div>
+
+  <div id="toolbar">
+    <label class="btn accent">
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      📁 Загрузить карту
+    </label>
+    <button class="btn" id="btnScale">📏 Задать масштаб</button>
+    <span class="field">
+      1&nbsp;px&nbsp;=
+      <input id="scaleInput" type="number" step="0.01" min="0.000001" placeholder="метров">
+      м
+    </span>
+    <button class="btn" id="btnPos">📍 Указать положение</button>
+    <button class="btn" id="btnFix">🎯 Уточнить</button>
+    <button class="btn" id="btnGps">🛰 GPS слежение</button>
+    <button class="btn" id="btnPoi">⭐ Точка интереса</button>
+    <button class="btn" id="btnFit">⤢ Вписать</button>
+  </div>
+
+  <div id="maparea">
+    <div id="viewport">
+      <div id="world">
+        <img id="mapimg" alt="Карта">
+        <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="markers"></div>
+      </div>
+    </div>
+
+    <div id="hint">
+      <div class="big">🗺️</div>
+      <div>Загрузите изображение карты (север — вверху)</div>
+    </div>
+
+    <div id="poiPanel">
+      <div class="panel-title">Точки интереса</div>
+      <div id="poiList"><div class="empty">Точек пока нет</div></div>
+    </div>
+
+    <div id="status">Шаг 1 — загрузите карту.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const M_PER_DEG_LAT = 111132.92;
+
+  const state = {
+    imgW: 0, imgH: 0,
+    scale: null,
+    ref: null,
+    pois: [],
+    myPos: null,
+    myPx: null,
+    pendingGPS: null,
+  };
+
+  let view = { x: 0, y: 0, k: 1 };
+  let mode = 'idle';
+  let scalePts = [];
+  let watchId = null;
+
+  let touchState = null;
+  let pinchState = null;
+
+  const $ = id => document.getElementById(id);
+  const viewport  = $('viewport');
+  const world     = $('world');
+  const mapimg    = $('mapimg');
+  const overlay   = $('overlay');
+  const markersEl = $('markers');
+  const statusEl  = $('status');
+  const poiListEl = $('poiList');
+  const hintEl    = $('hint');
+  const scaleInput= $('scaleInput');
+  const btnScale  = $('btnScale');
+  const btnPos    = $('btnPos');
+  const btnFix    = $('btnFix');
+  const btnGps    = $('btnGps');
+  const btnPoi    = $('btnPoi');
+  const btnFit    = $('btnFit');
+  const fileInput = $('fileInput');
+  const menuToggle= $('menuToggle');
+  const menuOverlay = $('menuOverlay');
+  const toolbar   = $('toolbar');
+
+  function mPerDegLon(lat) { return 111320 * Math.cos(lat * Math.PI / 180); }
+
+  function latLonToPx(lat, lon) {
+    if (!state.ref || !state.scale) return null;
+    const dx = (lon - state.ref.lon) * mPerDegLon(state.ref.lat);
+    const dy = (lat - state.ref.lat) * M_PER_DEG_LAT;
+    return {
+      x: state.ref.px + dx / state.scale,
+      y: state.ref.py - dy / state.scale
+    };
+  }
+
+  function getMyPx() {
+    if (!state.myPos || !state.ref) return null;
+    if (!state.scale) return { x: state.ref.px, y: state.ref.py };
+    return latLonToPx(state.myPos.lat, state.myPos.lon);
+  }
+
+  function fmtDist(m) {
+    if (m < 1000) return Math.round(m) + ' м';
+    return (m / 1000).toFixed(2) + ' км';
+  }
+
+  function fmtNum(v) {
+    if (v >= 1)     return v.toFixed(2);
+    if (v >= 0.01)  return v.toFixed(4);
+    return v.toExponential(2);
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  function openMenu() {
+    toolbar.classList.add('open');
+    menuOverlay.classList.add('open');
+  }
+  function closeMenu() {
+    toolbar.classList.remove('open');
+    menuOverlay.classList.remove('open');
+  }
+  menuToggle.addEventListener('click', () => {
+    if (toolbar.classList.contains('open')) closeMenu();
+    else openMenu();
+  });
+  menuOverlay.addEventListener('click', closeMenu);
+
+  function applyView() {
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+    const s = 1 / view.k;
+    const els = markersEl.children;
+    for (let i = 0; i < els.length; i++) els[i].style.transform = `scale(${s})`;
+  }
+
+  function fitView() {
+    if (!state.imgW) return;
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    const k = Math.min(vw / state.imgW, vh / state.imgH) * 0.96;
+    view.k = k;
+    view.x = (vw - state.imgW * k) / 2;
+    view.y = (vh - state.imgH * k) / 2;
+    applyView();
+  }
+
+  function centerOnMy() {
+    if (!state.myPx) return;
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    view.x = vw / 2 - state.myPx.x * view.k;
+    view.y = vh / 2 - state.myPx.y * view.k;
+    applyView();
+  }
+
+  function ensureVisible() {
+    if (!state.myPx) return;
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    const sx = state.myPx.x * view.k + view.x;
+    const sy = state.myPx.y * view.k + view.y;
+    const m = 70;
+    if (sx < m || sy < m || sx > vw - m || sy > vh - m) centerOnMy();
+  }
+
+  function screenToImage(clientX, clientY) {
+    const r = viewport.getBoundingClientRect();
+    return {
+      x: (clientX - r.left - view.x) / view.k,
+      y: (clientY - r.top  - view.y) / view.k
+    };
+  }
+
+  viewport.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const p1 = e.touches[0], p2 = e.touches[1];
+      const r = viewport.getBoundingClientRect();
+      const mid = {
+        x: (p1.clientX + p2.clientX) / 2 - r.left,
+        y: (p1.clientY + p2.clientY) / 2 - r.top
+      };
+      pinchState = {
+        startDist: Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY),
+        startK: view.k,
+        imageMid: {
+          x: (mid.x - view.x) / view.k,
+          y: (mid.y - view.y) / view.k
+        }
+      };
+      touchState = null;
+    } else if (e.touches.length === 1) {
+      touchState = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startVx: view.x,
+        startVy: view.y,
+        moved: false
+      };
+    }
+  }, { passive: false });
+
+  viewport.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (pinchState && e.touches.length === 2) {
+      const p1 = e.touches[0], p2 = e.touches[1];
+      const dist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+      const k2 = Math.min(40, Math.max(0.02, pinchState.startK * (dist / pinchState.startDist)));
+      const r = viewport.getBoundingClientRect();
+      const mid = {
+        x: (p1.clientX + p2.clientX) / 2 - r.left,
+        y: (p1.clientY + p2.clientY) / 2 - r.top
+      };
+      view.k = k2;
+      view.x = mid.x - pinchState.imageMid.x * k2;
+      view.y = mid.y - pinchState.imageMid.y * k2;
+      applyView();
+      return;
+    }
+    if (touchState && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - touchState.startX;
+      const dy = e.touches[0].clientY - touchState.startY;
+      if (!touchState.moved && Math.hypot(dx, dy) > 10) touchState.moved = true;
+      if (touchState.moved) {
+        view.x = touchState.startVx + dx;
+        view.y = touchState.startVy + dy;
+        applyView();
+      }
+    }
+  }, { passive: false });
+
+  viewport.addEventListener('touchend', e => {
+    e.preventDefault();
+
+    if (pinchState) {
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        touchState = {
+          startX: t.clientX,
+          startY: t.clientY,
+          startVx: view.x,
+          startVy: view.y,
+          moved: true
+        };
+        pinchState = null;
+      } else if (e.touches.length === 0) {
+        pinchState = null;
+        touchState = null;
+      }
+      return;
+    }
+
+    if (!touchState) return;
+    const wasMoved = touchState.moved;
+    const t = e.changedTouches[0];
+    touchState = null;
+    if (wasMoved) return;
+
+    const p = screenToImage(t.clientX, t.clientY);
+    if (p.x < 0 || p.y < 0 || p.x > state.imgW || p.y > state.imgH) return;
+    onMapClick(p);
+  }, { passive: false });
+
+  viewport.addEventListener('touchcancel', e => {
+    e.preventDefault();
+    pinchState = null;
+    touchState = null;
+  }, { passive: false });
+
+  viewport.addEventListener('contextmenu', e => e.preventDefault());
+
+  window.addEventListener('resize', applyView);
+
+  function onMapClick(p) {
+
+    if (mode === 'scale') {
+      scalePts.push(p);
+      renderOverlay();
+      if (scalePts.length === 1) {
+        setStatus('Масштаб: тапните 2-ю точку известного отрезка.');
+        return;
+      }
+      const [a, b] = scalePts;
+      const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (pxLen < 1) {
+        scalePts = []; mode = 'idle'; setModeUI(); renderOverlay();
+        setStatus('Точки слишком близко, попробуйте снова.');
+        return;
+      }
+      const raw = prompt(
+        `Длина отрезка на карте: ${pxLen.toFixed(1)} px.\n\n` +
+        `Введите реальное расстояние между этими точками (в метрах):`, '');
+      const meters = parseFloat(String(raw).replace(',', '.'));
+      if (isFinite(meters) && meters > 0) {
+        state.scale = meters / pxLen;
+        setStatus(`Масштаб задан: 1 px = ${fmtNum(state.scale)} м  (${(1 / state.scale).toFixed(2)} px = 1 м)`);
+      } else {
+        setStatus('Масштаб не изменён.');
+      }
+      scalePts = []; mode = 'idle'; setModeUI(); render();
+      return;
+    }
+
+    if (mode === 'position') {
+      if (!state.pendingGPS) { mode = 'idle'; setModeUI(); setStatus('Нет данных GPS.'); return; }
+      state.ref = {
+        lat: state.pendingGPS.lat,
+        lon: state.pendingGPS.lon,
+        px: p.x, py: p.y
+      };
+      state.myPos = {
+        lat: state.pendingGPS.lat,
+        lon: state.pendingGPS.lon,
+        acc: state.pendingGPS.acc
+      };
+      state.pendingGPS = null;
+      mode = 'idle'; setModeUI(); render();
+      setStatus('Положение зафиксировано. Ваша точка отображается на карте.\n' +
+                (state.scale
+                  ? 'Можно включать «GPS слежение» и добавлять точки интереса.'
+                  : 'Не забудьте задать масштаб — без него не считаются расстояния.'));
+      return;
+    }
+
+    if (mode === 'poi') {
+      const name = prompt('Название точки:', 'Точка ' + (state.pois.length + 1));
+      mode = 'idle'; setModeUI();
+      if (name && name.trim()) {
+        state.pois.push({
+          id: 'p' + Date.now() + Math.random().toString(36).slice(2, 7),
+          name: name.trim().slice(0, 40),
+          x: p.x, y: p.y
+        });
+        render();
+        setStatus('Точка добавлена.');
+      } else {
+        setStatus('Добавление отменено.');
+      }
+      return;
+    }
+  }
+
+  function render() {
+    state.myPx = getMyPx();
+    renderMarkers();
+    renderOverlay();
+    renderPoiList();
+    syncScaleInput();
+    applyView();
+  }
+
+  function makeMarker(x, y, cls, html) {
+    const el = document.createElement('div');
+    el.className = 'marker ' + cls;
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.innerHTML = html;
+    return el;
+  }
+
+  function renderMarkers() {
+    markersEl.innerHTML = '';
+
+    if (state.myPx) {
+      const html =
+        '<div class="pulse"></div>' +
+        '<div class="pin"></div>' +
+        '<div class="label">Я</div>';
+      markersEl.appendChild(makeMarker(state.myPx.x, state.myPx.y, 'me', html));
+    }
+
+    for (const poi of state.pois) {
+      const d = poiDistance(poi);
+      const html =
+        '<div class="pin"></div>' +
+        '<div class="label">' + esc(poi.name) +
+        (d != null ? '<br><span class="d">' + fmtDist(d) + '</span>' : '') +
+        '</div>';
+      markersEl.appendChild(makeMarker(poi.x, poi.y, 'poi', html));
+    }
+  }
+
+  function poiDistance(poi) {
+    if (!state.scale || !state.myPx) return null;
+    return Math.hypot(poi.x - state.myPx.x, poi.y - state.myPx.y) * state.scale;
+  }
+
+  function renderOverlay() {
+    overlay.innerHTML = '';
+
+    if (state.myPx && state.myPos && state.myPos.acc && state.scale) {
+      const r = state.myPos.acc / state.scale;
+      if (r > 1 && r < 1e7) {
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', state.myPx.x);
+        c.setAttribute('cy', state.myPx.y);
+        c.setAttribute('r', r);
+        c.setAttribute('fill', 'rgba(61,139,253,0.10)');
+        c.setAttribute('stroke', 'rgba(61,139,253,0.55)');
+        c.setAttribute('stroke-width', '1.5');
+        c.setAttribute('vector-effect', 'non-scaling-stroke');
+        overlay.appendChild(c);
+      }
+    }
+
+    if (scalePts.length) {
+      for (const p of scalePts) {
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', p.x);
+        c.setAttribute('cy', p.y);
+        c.setAttribute('r', 5);
+        c.setAttribute('fill', '#ffb020');
+        c.setAttribute('stroke', '#fff');
+        c.setAttribute('stroke-width', '2');
+        c.setAttribute('vector-effect', 'non-scaling-stroke');
+        overlay.appendChild(c);
+      }
+      if (scalePts.length === 2) {
+        const [a, b] = scalePts;
+        const ln = document.createElementNS(NS, 'line');
+        ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+        ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+        ln.setAttribute('stroke', '#ffb020');
+        ln.setAttribute('stroke-width', '2');
+        ln.setAttribute('stroke-dasharray', '8 6');
+        ln.setAttribute('vector-effect', 'non-scaling-stroke');
+        overlay.appendChild(ln);
+      }
+    }
+  }
+
+  function renderPoiList() {
+    if (!state.pois.length) {
+      poiListEl.innerHTML = '<div class="empty">Точек пока нет</div>';
+      return;
+    }
+    poiListEl.innerHTML = state.pois.map(poi => {
+      const d = poiDistance(poi);
+      return '<div class="poi-row">' +
+        '<span class="poi-name" title="' + esc(poi.name) + '">' + esc(poi.name) + '</span>' +
+        '<span class="poi-dist">' + (d != null ? fmtDist(d) : '—') + '</span>' +
+        '<button class="del" data-id="' + poi.id + '" title="Удалить">✕</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  poiListEl.addEventListener('click', e => {
+    const btn = e.target.closest('.del');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    state.pois = state.pois.filter(p => p.id !== id);
+    render();
+  });
+
+  function syncScaleInput() {
+    if (document.activeElement === scaleInput) return;
+    scaleInput.value = state.scale ? +state.scale.toFixed(6) : '';
+  }
+
+  scaleInput.addEventListener('change', () => {
+    const v = parseFloat(String(scaleInput.value).replace(',', '.'));
+    if (isFinite(v) && v > 0) {
+      state.scale = v;
+      render();
+      setStatus(`Масштаб: 1 px = ${fmtNum(v)} м  (${(1 / v).toFixed(2)} px = 1 м)`);
+    } else {
+      syncScaleInput();
+    }
+  });
+
+  function setMode(m) {
+    mode = m;
+    viewport.classList.remove('mode-scale', 'mode-position', 'mode-poi');
+    if (m !== 'idle') viewport.classList.add('mode-' + m);
+    btnScale.classList.toggle('active', m === 'scale');
+    btnPos.classList.toggle('active', m === 'position');
+    btnFix.classList.toggle('active', m === 'position');
+    btnPoi.classList.toggle('active', m === 'poi');
+  }
+  function setModeUI() { setMode(mode); }
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    mapimg.onload = () => {
+      state.imgW = mapimg.naturalWidth;
+      state.imgH = mapimg.naturalHeight;
+      world.style.width  = state.imgW + 'px';
+      world.style.height = state.imgH + 'px';
+      overlay.setAttribute('width', state.imgW);
+      overlay.setAttribute('height', state.imgH);
+      overlay.setAttribute('viewBox', `0 0 ${state.imgW} ${state.imgH}`);
+      markersEl.style.width  = state.imgW + 'px';
+      markersEl.style.height = state.imgH + 'px';
+      hintEl.style.display = 'none';
+      fitView();
+      render();
+      setStatus(`Карта загружена: ${state.imgW}×${state.imgH} px.\n` +
+                'Задайте масштаб (📏) — тапните две точки и введите расстояние.');
+      mapimg.onload = null;
+      URL.revokeObjectURL(url);
+    };
+    mapimg.onerror = () => {
+      setStatus('Не удалось загрузить изображение.');
+      URL.revokeObjectURL(url);
+    };
+    mapimg.src = url;
+    fileInput.value = '';
+    closeMenu();
+  });
+
+  btnScale.addEventListener('click', () => {
+    if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
+    if (mode === 'scale') { setMode('idle'); scalePts = []; renderOverlay(); setStatus('Отменено.'); return; }
+    setMode('scale');
+    scalePts = [];
+    renderOverlay();
+    setStatus('Масштаб: тапните 1-ю точку известного отрезка на карте.');
+    closeMenu();
+  });
+
+  function startPositioning() {
+    if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
+    if (!navigator.geolocation) { setStatus('Геолокация не поддерживается браузером.'); return; }
+    setMode('idle');
+    setStatus('Определяем GPS…');
+    navigator.geolocation.getCurrentPosition(pos => {
+      state.pendingGPS = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        acc: pos.coords.accuracy
+      };
+      setMode('position');
+      setStatus(
+        `GPS получен: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} ` +
+        `(±${Math.round(pos.coords.accuracy)} м).\n` +
+        'Тапните на карте точку, где вы сейчас находитесь.');
+    }, err => {
+      setMode('idle');
+      setStatus('Ошибка GPS: ' + err.message);
+    }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+  }
+
+  btnPos.addEventListener('click', () => { startPositioning(); closeMenu(); });
+
+  btnFix.addEventListener('click', () => {
+    if (!state.ref) { startPositioning(); closeMenu(); return; }
+    setStatus('Уточнение положения: определяем GPS…');
+    navigator.geolocation.getCurrentPosition(pos => {
+      state.pendingGPS = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        acc: pos.coords.accuracy
+      };
+      setMode('position');
+      setStatus('Тапните на карте ваше ТЕКУЩЕЕ положение —\n' +
+                'карта и все расстояния будут пересчитаны.');
+    }, err => {
+      setMode('idle');
+      setStatus('Ошибка GPS: ' + err.message);
+    }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+    closeMenu();
+  });
+
+  btnGps.addEventListener('click', () => {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      btnGps.classList.remove('active');
+      setStatus('GPS-слежение остановлено.');
+      return;
+    }
+    if (!state.ref) {
+      setStatus('Сначала нажмите «📍 Указать положение» и отметьте себя на карте.');
+      return;
+    }
+    if (!navigator.geolocation) { setStatus('Геолокация не поддерживается.'); return; }
+
+    btnGps.classList.add('active');
+    setStatus('Запуск GPS-слежения…');
+    watchId = navigator.geolocation.watchPosition(onGpsUpdate, onGpsError, {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 30000
+    });
+    closeMenu();
+  });
+
+  function onGpsUpdate(pos) {
+    state.myPos = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      acc: pos.coords.accuracy
+    };
+    render();
+    ensureVisible();
+    setStatus(
+      `GPS: ${state.myPos.lat.toFixed(6)}, ${state.myPos.lon.toFixed(6)}  ±${Math.round(state.myPos.acc)} м` +
+      (state.scale ? '' : '\n(масштаб не задан — расстояния не считаются)'));
+  }
+
+  function onGpsError(err) {
+    setStatus('Ошибка GPS: ' + err.message);
+  }
+
+  btnPoi.addEventListener('click', () => {
+    if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
+    if (mode === 'poi') { setMode('idle'); setStatus('Отменено.'); return; }
+    setMode('poi');
+    setStatus('Тапните на карте место для новой точки интереса.');
+    closeMenu();
+  });
+
+  btnFit.addEventListener('click', () => {
+    if (!state.imgW) return;
+    fitView();
+    closeMenu();
+  });
+
+  applyView();
+  syncScaleInput();
+})();
+</script>
+</body>
+</html>
