@@ -124,6 +124,22 @@
     padding:0 2px;line-height:1;border-radius:4px;
   }
 
+  .poi-summary {
+    padding: 10px 8px;
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text);
+  }
+  .poi-summary .dist-val {
+    color: var(--warn);
+    font-variant-numeric: tabular-nums;
+  }
+
   #status{
     position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);
     background:rgba(20,22,28,.9);border:1px solid var(--line);border-radius:9px;
@@ -200,7 +216,7 @@
     <button class="btn" id="btnPos">📍 Указать положение</button>
     <button class="btn" id="btnFix">🎯 Уточнить</button>
     <button class="btn" id="btnGps">🛰 GPS слежение</button>
-    <button class="btn" id="btnPoi">⭐ Точка интереса</button>
+    <button class="btn" id="btnPoi">🎯 Добавить КП</button>
     <button class="btn" id="btnFit">⤢ Вписать</button>
     <button class="btn" id="btnFull">⛶ Полный экран</button>
     <div style="height:1px;background:var(--line);margin:6px 0;"></div>
@@ -222,8 +238,8 @@
     </div>
 
     <div id="poiPanel">
-      <div class="panel-title">Точки интереса</div>
-      <div id="poiList"><div class="empty">Точек пока нет</div></div>
+      <div class="panel-title">КП</div>
+      <div id="poiList"><div class="empty">КП пока нет</div></div>
     </div>
 
     <div id="status">Шаг 1 — загрузите карту.</div>
@@ -671,19 +687,22 @@
     }
 
     if (mode === 'poi') {
-      const name = prompt('Название точки:', 'Точка ' + (state.pois.length + 1));
-      mode = 'idle'; setModeUI();
-      if (name && name.trim()) {
-        state.pois.push({
-          id: 'p' + Date.now() + Math.random().toString(36).slice(2, 7),
-          name: name.trim().slice(0, 40),
-          x: p.x, y: p.y
-        });
-        render();
-        setStatus('Точка добавлена.');
-      } else {
-        setStatus('Добавление отменено.');
+      let maxNum = 0;
+      for (const poi of state.pois) {
+        const match = poi.name.match(/КП(\d+)/);
+        if (match) {
+          maxNum = Math.max(maxNum, parseInt(match[1], 10));
+        }
       }
+      const nextName = 'КП' + (maxNum + 1);
+      
+      state.pois.push({
+        id: 'p' + Date.now() + Math.random().toString(36).slice(2, 7),
+        name: nextName,
+        x: p.x, y: p.y
+      });
+      mode = 'idle'; setModeUI(); render();
+      setStatus('Добавлен ' + nextName);
       return;
     }
   }
@@ -729,6 +748,18 @@
     return Math.hypot(poi.x - state.myPx.x, poi.y - state.myPx.y) * state.scale;
   }
 
+  function getTotalRouteDistance() {
+    if (!state.myPx || !state.scale) return null;
+    if (state.pois.length === 0) return 0;
+    let totalPxDist = 0;
+    let prevPoint = { x: state.myPx.x, y: state.myPx.y };
+    for (const poi of state.pois) {
+      totalPxDist += Math.hypot(poi.x - prevPoint.x, poi.y - prevPoint.y);
+      prevPoint = { x: poi.x, y: poi.y };
+    }
+    return totalPxDist * state.scale;
+  }
+
   function renderOverlay() {
     overlay.innerHTML = '';
     if (state.myPx && state.myPos && state.myPos.acc && state.scale) {
@@ -772,10 +803,11 @@
 
   function renderPoiList() {
     if (!state.pois.length) {
-      poiListEl.innerHTML = '<div class="empty">Точек пока нет</div>';
+      poiListEl.innerHTML = '<div class="empty">КП пока нет</div>';
       return;
     }
-    poiListEl.innerHTML = state.pois.map(poi => {
+    
+    let html = state.pois.map(poi => {
       const d = poiDistance(poi);
       return '<div class="poi-row">' +
         '<span class="poi-name" title="' + esc(poi.name) + '">' + esc(poi.name) + '</span>' +
@@ -783,6 +815,16 @@
         '<button class="del" data-id="' + poi.id + '" title="Удалить">✕</button>' +
         '</div>';
     }).join('');
+    
+    const totalDist = getTotalRouteDistance();
+    if (totalDist !== null) {
+      html += '<div class="poi-summary">' +
+        '<span>Общий путь:</span>' +
+        '<span class="dist-val">' + fmtDist(totalDist) + '</span>' +
+        '</div>';
+    }
+    
+    poiListEl.innerHTML = html;
   }
 
   poiListEl.addEventListener('click', e => {
@@ -1040,7 +1082,7 @@
     if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
     if (mode === 'poi') { setMode('idle'); setStatus('Отменено.'); return; }
     setMode('poi');
-    setStatus('Тапните на карте место для новой точки интереса.');
+    setStatus('Тапните на карте место для нового КП.');
     closeMenu();
   });
 
@@ -1064,7 +1106,7 @@
   });
 
   btnReset.addEventListener('click', async () => {
-    if (!confirm('Удалить карту, масштаб, положение и все точки интереса?')) return;
+    if (!confirm('Удалить карту, масштаб, положение и все КП?')) return;
     if (watchId !== null) {
       try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
       watchId = null;
@@ -1089,7 +1131,7 @@
     world.style.height = '0';
     overlay.innerHTML = '';
     markersEl.innerHTML = '';
-    poiListEl.innerHTML = '<div class="empty">Точек пока нет</div>';
+    poiListEl.innerHTML = '<div class="empty">КП пока нет</div>';
     scaleInput.value = '';
     hintEl.style.display = '';
     setStatus('Всё удалено. Нажмите «Загрузить карту».');
@@ -1125,7 +1167,7 @@
       if (ok) {
         render();
         setStatus(state.ref
-          ? 'Карта восстановлена. Ваше положение и точки на месте.'
+          ? 'Карта восстановлена. Ваше положение и КП на месте.'
           : 'Карта восстановлена. Задайте масштаб (📏) и укажите положение (📍).');
         return;
       }
