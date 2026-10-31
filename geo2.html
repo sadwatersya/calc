@@ -174,6 +174,27 @@
   }
   #hint .big{font-size:38px;opacity:.5}
 
+  #btnScaleOk {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    padding: 14px 40px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: 0 6px 20px rgba(61, 139, 253, 0.4);
+    cursor: pointer;
+    display: none;
+  }
+  #btnScaleOk:active {
+    transform: translateX(-50%) scale(0.95);
+  }
+
   .modal {
     position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200;
     display: none; align-items: center; justify-content: center; padding: 20px;
@@ -268,6 +289,8 @@
   </div>
 </div>
 
+<button id="btnScaleOk">ОК</button>
+
 <div id="resizeModal" class="modal">
   <div class="modal-content">
     <div class="modal-title">Размер изображения</div>
@@ -321,6 +344,7 @@
   let touchState = null;
   let pinchState = null;
   let pendingFile = null;
+  let draggingScalePt = -1;
 
   const $ = id => document.getElementById(id);
   const viewport  = $('viewport');
@@ -354,6 +378,7 @@
   const btnAddPoi = $('btnAddPoi');
   const btnPoiToggle = $('btnPoiToggle');
   const poiPanel = $('poiPanel');
+  const btnScaleOk = $('btnScaleOk');
 
   function mPerDegLon(lat) { return 111320 * Math.cos(lat * Math.PI / 180); }
 
@@ -568,6 +593,23 @@
 
   viewport.addEventListener('touchstart', e => {
     e.preventDefault();
+    
+    if (mode === 'scale' && scalePts.length === 2 && e.touches.length === 1) {
+      const r = viewport.getBoundingClientRect();
+      const tx = e.touches[0].clientX - r.left;
+      const ty = e.touches[0].clientY - r.top;
+      
+      for (let i = 0; i < 2; i++) {
+        const px = scalePts[i].x * view.k + view.x;
+        const py = scalePts[i].y * view.k + view.y;
+        if (Math.hypot(tx - px, ty - py) < 40) {
+          draggingScalePt = i;
+          touchState = null;
+          return;
+        }
+      }
+    }
+
     if (e.touches.length === 2) {
       const p1 = e.touches[0], p2 = e.touches[1];
       const r = viewport.getBoundingClientRect();
@@ -597,6 +639,14 @@
 
   viewport.addEventListener('touchmove', e => {
     e.preventDefault();
+    
+    if (draggingScalePt !== -1 && e.touches.length === 1) {
+      const p = screenToImage(e.touches[0].clientX, e.touches[0].clientY);
+      scalePts[draggingScalePt] = p;
+      renderOverlay();
+      return;
+    }
+
     if (pinchState && e.touches.length === 2) {
       const p1 = e.touches[0], p2 = e.touches[1];
       const dist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
@@ -626,6 +676,12 @@
 
   viewport.addEventListener('touchend', e => {
     e.preventDefault();
+    
+    if (draggingScalePt !== -1) {
+      draggingScalePt = -1;
+      return;
+    }
+
     if (pinchState) {
       if (e.touches.length === 1) {
         const t = e.touches[0];
@@ -649,6 +705,7 @@
 
   viewport.addEventListener('touchcancel', e => {
     e.preventDefault();
+    draggingScalePt = -1;
     pinchState = null;
     touchState = null;
   }, { passive: false });
@@ -659,30 +716,17 @@
   function onMapClick(p) {
 
     if (mode === 'scale') {
+      if (scalePts.length >= 2) return;
+      
       scalePts.push(p);
       renderOverlay();
+      
       if (scalePts.length === 1) {
         setStatus('Масштаб: тапните 2-ю точку известного отрезка.');
-        return;
+      } else if (scalePts.length === 2) {
+        setStatus('Отрезок задан. Двигайте точки пальцем для точности или нажмите ОК.');
+        btnScaleOk.style.display = 'block';
       }
-      const [a, b] = scalePts;
-      const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
-      if (pxLen < 1) {
-        scalePts = []; mode = 'idle'; setModeUI(); renderOverlay();
-        setStatus('Точки слишком близко, попробуйте снова.');
-        return;
-      }
-      
-      pendingScalePxLen = pxLen;
-      scaleModalDesc.textContent = `Длина отрезка: ${pxLen.toFixed(1)} px. Введите реальное расстояние (в метрах):`;
-      scaleMetersInput.value = '';
-      scaleMetersInput.style.borderColor = 'var(--line)';
-      scaleModal.classList.add('open');
-      setTimeout(() => scaleMetersInput.focus(), 100);
-      
-      mode = 'idle';
-      setModeUI();
-      
       return;
     }
 
@@ -803,7 +847,7 @@
       for (const p of scalePts) {
         const c = document.createElementNS(NS, 'circle');
         c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
-        c.setAttribute('r', 5);
+        c.setAttribute('r', 8);
         c.setAttribute('fill', '#ffb020');
         c.setAttribute('stroke', '#fff');
         c.setAttribute('stroke-width', '2');
@@ -881,6 +925,9 @@
     btnScale.classList.toggle('active', m === 'scale');
     btnPos.classList.toggle('active', m === 'position');
     btnAddPoi.classList.toggle('active', m === 'poi');
+    if (m !== 'scale') {
+      btnScaleOk.style.display = 'none';
+    }
   }
   function setModeUI() { setMode(mode); }
 
@@ -976,10 +1023,29 @@
     });
   });
 
+  btnScaleOk.addEventListener('click', () => {
+    if (scalePts.length === 2) {
+      const [a, b] = scalePts;
+      const pxLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (pxLen < 1) {
+        setStatus('Точки слишком близко, попробуйте снова.');
+        return;
+      }
+      pendingScalePxLen = pxLen;
+      scaleModalDesc.textContent = `Длина отрезка: ${pxLen.toFixed(1)} px. Введите реальное расстояние (в метрах):`;
+      scaleMetersInput.value = '';
+      scaleMetersInput.style.borderColor = 'var(--line)';
+      scaleModal.classList.add('open');
+      setTimeout(() => scaleMetersInput.focus(), 100);
+      btnScaleOk.style.display = 'none';
+    }
+  });
+
   scaleCancelBtn.addEventListener('click', () => {
     scaleModal.classList.remove('open');
     scalePts = [];
     renderOverlay();
+    setMode('idle');
     setStatus('Масштаб не изменён.');
   });
 
@@ -995,6 +1061,7 @@
       setStatus(`Масштаб задан: 1 м = ${(1 / state.scale).toFixed(2)} px (1 px = ${fmtNum(state.scale)} м)`);
       scaleModal.classList.remove('open');
       scalePts = [];
+      setMode('idle');
       render();
     } else {
       scaleMetersInput.style.borderColor = 'red';
