@@ -94,7 +94,7 @@
       linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
     background-size:40px 40px;
   }
-  #viewport.mode-scale,#viewport.mode-poi,#viewport.mode-position{cursor:crosshair}
+  #viewport.mode-scale,#viewport.mode-poi,#viewport.mode-position,#viewport.mode-calibrate{cursor:crosshair}
 
   #world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
   #mapimg{display:block;width:100%;height:100%;-webkit-user-drag:none;pointer-events:none}
@@ -259,6 +259,7 @@
       px
     </span>
     <button class="btn" id="btnPos">📍 Указать положение</button>
+    <button class="btn" id="btnCalibrate">🧭 Калибровка севера</button>
     <button class="btn" id="btnGps">🛰 GPS слежение</button>
     <button class="btn" id="btnFit">⤢ Вписать</button>
     <button class="btn" id="btnFull">⛶ Полный экран</button>
@@ -334,6 +335,7 @@
     myPos: null,
     myPx: null,
     pendingGPS: null,
+    northAngle: 0,
   };
 
   let view = { x: 0, y: 0, k: 1 };
@@ -358,6 +360,7 @@
   const scaleInput= $('scaleInput');
   const btnScale  = $('btnScale');
   const btnPos    = $('btnPos');
+  const btnCalibrate = $('btnCalibrate');
   const btnGps    = $('btnGps');
   const btnFit    = $('btnFit');
   const btnFull   = $('btnFull');
@@ -384,11 +387,18 @@
 
   function latLonToPx(lat, lon) {
     if (!state.ref || !state.scale) return null;
-    const dx = (lon - state.ref.lon) * mPerDegLon(state.ref.lat);
-    const dy = (lat - state.ref.lat) * M_PER_DEG_LAT;
+    const dE = (lon - state.ref.lon) * mPerDegLon(state.ref.lat);
+    const dN = (lat - state.ref.lat) * M_PER_DEG_LAT;
+    
+    const ca = Math.cos(state.northAngle);
+    const sa = Math.sin(state.northAngle);
+    
+    const px_dx = (dE * ca + dN * sa) / state.scale;
+    const px_dy = (dE * sa - dN * ca) / state.scale;
+    
     return {
-      x: state.ref.px + dx / state.scale,
-      y: state.ref.py - dy / state.scale
+      x: state.ref.px + px_dx,
+      y: state.ref.py + px_dy
     };
   }
 
@@ -422,7 +432,8 @@
         scale: state.scale,
         ref: state.ref,
         pois: state.pois,
-        myPos: state.myPos
+        myPos: state.myPos,
+        northAngle: state.northAngle
       }));
     } catch (e) {}
   }
@@ -753,6 +764,39 @@
       return;
     }
 
+    if (mode === 'calibrate') {
+      if (!state.pendingGPS) { mode = 'idle'; setModeUI(); setStatus('Нет данных GPS.'); return; }
+      
+      const dE = (state.pendingGPS.lon - state.ref.lon) * mPerDegLon(state.ref.lat);
+      const dN = (state.pendingGPS.lat - state.ref.lat) * M_PER_DEG_LAT;
+      
+      const dx = p.x - state.ref.px;
+      const dy = p.y - state.ref.py;
+      
+      const alpha = Math.atan2(dy, dx) - Math.atan2(-dN, dE);
+      
+      let normAlpha = alpha;
+      while (normAlpha > Math.PI) normAlpha -= 2 * Math.PI;
+      while (normAlpha < -Math.PI) normAlpha += 2 * Math.PI;
+      
+      state.northAngle = normAlpha;
+      state.myPos = {
+        lat: state.pendingGPS.lat,
+        lon: state.pendingGPS.lon,
+        acc: state.pendingGPS.acc
+      };
+      state.pendingGPS = null;
+      mode = 'idle'; setModeUI(); render();
+      
+      const deg = Math.round(state.northAngle * 180 / Math.PI);
+      setStatus(`Север откалиброван. Угол поворота: ${deg}°.\nВсе расстояния теперь учитывают ориентацию карты.`);
+      
+      if (watchId === null) {
+        startGpsWatch();
+      }
+      return;
+    }
+
     if (mode === 'poi') {
       let maxNum = 0;
       for (const poi of state.pois) {
@@ -920,11 +964,12 @@
 
   function setMode(m) {
     mode = m;
-    viewport.classList.remove('mode-scale', 'mode-position', 'mode-poi');
+    viewport.classList.remove('mode-scale', 'mode-position', 'mode-poi', 'mode-calibrate');
     if (m !== 'idle') viewport.classList.add('mode-' + m);
     btnScale.classList.toggle('active', m === 'scale');
     btnPos.classList.toggle('active', m === 'position');
     btnAddPoi.classList.toggle('active', m === 'poi');
+    btnCalibrate.classList.toggle('active', m === 'calibrate');
     if (m !== 'scale') {
       btnScaleOk.style.display = 'none';
     }
@@ -986,6 +1031,7 @@
       state.myPos = null;
       state.myPx = null;
       state.pendingGPS = null;
+      state.northAngle = 0;
       scalePts = [];
       setMode('idle');
 
@@ -1107,6 +1153,43 @@
 
   btnPos.addEventListener('click', () => { startPositioning(); closeMenu(); });
 
+  btnCalibrate.addEventListener('click', () => {
+    if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
+    if (!state.ref) { setStatus('Сначала укажите ваше положение (📍).'); return; }
+    if (!navigator.geolocation) { setStatus('Геолокация не поддерживается.'); return; }
+    
+    setMode('idle');
+    setStatus('Определяем GPS…');
+    
+    navigator.geolocation.getCurrentPosition(pos => {
+      state.pendingGPS = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        acc: pos.coords.accuracy
+      };
+      
+      const dE = (state.pendingGPS.lon - state.ref.lon) * mPerDegLon(state.ref.lat);
+      const dN = (state.pendingGPS.lat - state.ref.lat) * M_PER_DEG_LAT;
+      const dist = Math.hypot(dE, dN);
+      
+      if (dist < 15) {
+        setStatus(`Вы прошли всего ${Math.round(dist)} м. Для точной калибровки пройдите хотя бы 30-50 метров и попробуйте снова.`);
+        return;
+      }
+      
+      setMode('calibrate');
+      setStatus(
+        `GPS: ${state.pendingGPS.lat.toFixed(6)}, ${state.pendingGPS.lon.toFixed(6)} (±${Math.round(state.pendingGPS.acc)} м).\n` +
+        `Вы отошли на ${Math.round(dist)} м. Тапните на карте, где вы сейчас находитесь.`
+      );
+    }, err => {
+      setMode('idle');
+      setStatus('Ошибка GPS: ' + err.message);
+    }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+    
+    closeMenu();
+  });
+
   function startGpsWatch() {
     if (!state.ref) return;
     if (!navigator.geolocation) { setStatus('Геолокация не поддерживается.'); return; }
@@ -1197,6 +1280,7 @@
     state.myPos = null;
     state.myPx = null;
     state.pendingGPS = null;
+    state.northAngle = 0;
     scalePts = [];
     setMode('idle');
     view = { x: 0, y: 0, k: 1 };
@@ -1223,6 +1307,7 @@
         if (s.ref && typeof s.ref === 'object') state.ref = s.ref;
         if (Array.isArray(s.pois)) state.pois = s.pois;
         if (s.myPos && typeof s.myPos === 'object') state.myPos = s.myPos;
+        if (s.northAngle != null) state.northAngle = s.northAngle;
       }
     } catch (e) {}
 
@@ -1252,6 +1337,7 @@
       state.ref = null;
       state.pois = [];
       state.myPos = null;
+      state.northAngle = 0;
     }
 
     render();
