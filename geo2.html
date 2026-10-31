@@ -109,15 +109,7 @@
   }
   .marker.poi .pin{background:var(--warn)}
   .marker.me .pin{background:var(--accent);width:18px;height:18px}
-  .marker.me .pulse{
-    position:absolute;left:0;top:0;transform:translate(-50%,-50%);
-    width:18px;height:18px;border-radius:50%;background:rgba(61,139,253,.55);
-    animation:pulse 2s ease-out infinite;
-  }
-  @keyframes pulse{
-    0%{transform:translate(-50%,-50%) scale(1);opacity:.75}
-    100%{transform:translate(-50%,-50%) scale(3.6);opacity:0}
-  }
+  
   .marker .label{
     position:absolute;left:0;top:11px;transform:translateX(-50%);
     background:rgba(10,12,16,.82);border:1px solid rgba(255,255,255,.12);
@@ -566,15 +558,6 @@
     applyView();
   }
 
-  function ensureVisible() {
-    if (!state.myPx) return;
-    const vw = viewport.clientWidth, vh = viewport.clientHeight;
-    const sx = state.myPx.x * view.k + view.x;
-    const sy = state.myPx.y * view.k + view.y;
-    const m = 70;
-    if (sx < m || sy < m || sx > vw - m || sy > vh - m) centerOnMy();
-  }
-
   function screenToImage(clientX, clientY) {
     const r = viewport.getBoundingClientRect();
     return {
@@ -769,7 +752,7 @@
   function renderMarkers() {
     markersEl.innerHTML = '';
     if (state.myPx) {
-      const html = '<div class="pulse"></div><div class="pin"></div><div class="label">Я</div>';
+      const html = '<div class="pin"></div><div class="label">Я</div>';
       markersEl.appendChild(makeMarker(state.myPx.x, state.myPx.y, 'me', html));
     }
     for (const poi of state.pois) {
@@ -1100,7 +1083,6 @@
       acc: pos.coords.accuracy
     };
     render();
-    ensureVisible();
     setStatus(
       `GPS: ${state.myPos.lat.toFixed(6)}, ${state.myPos.lon.toFixed(6)}  ±${Math.round(state.myPos.acc)} м` +
       (state.scale ? '' : '\n(масштаб не задан — расстояния не считаются)'));
