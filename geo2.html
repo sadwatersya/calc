@@ -27,6 +27,29 @@
   }
   #menuToggle:active{transform:scale(.94)}
 
+  #btnAddPoi{
+    position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:100;
+    height:44px;padding:0 14px;border-radius:12px;
+    background:rgba(35,38,46,.92);border:1px solid var(--line);
+    color:var(--text);font-size:13px;font-weight:bold;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.45);
+    transition:.2s;
+  }
+  #btnAddPoi:active{transform:translateX(-50%) scale(.94)}
+  #btnAddPoi.active{background:var(--accent);border-color:var(--accent);}
+
+  #btnPoiToggle{
+    position:fixed;top:10px;right:10px;z-index:100;
+    width:44px;height:44px;border-radius:12px;
+    background:rgba(35,38,46,.92);border:1px solid var(--line);
+    color:var(--text);font-size:14px;font-weight:bold;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.45);
+    transition:.2s;
+  }
+  #btnPoiToggle:active{transform:scale(.94)}
+
   #menuOverlay{
     position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;
     opacity:0;pointer-events:none;transition:opacity .22s;
@@ -104,12 +127,16 @@
   .marker .label .d{color:#8fc4ff;font-weight:600}
 
   #poiPanel{
-    position:absolute;top:0;right:0;width:230px;max-height:calc(100% - 60px);
+    position:absolute;top:62px;right:10px;width:230px;max-height:calc(100% - 80px);
     display:flex;flex-direction:column;background:rgba(28,31,38,.92);
-    border:1px solid var(--line);border-radius:10px 0 10px 10px;
+    border:1px solid var(--line);border-radius:10px;
     backdrop-filter:blur(8px);z-index:15;overflow:hidden;
     box-shadow:0 8px 24px rgba(0,0,0,.45);
+    transform:translateX(calc(100% + 20px));
+    transition:transform .24s cubic-bezier(.4,0,.2,1);
   }
+  #poiPanel.open{transform:translateX(0);}
+
   #poiPanel .panel-title{
     padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
     color:var(--dim);border-bottom:1px solid var(--line);flex:0 0 auto;
@@ -189,7 +216,9 @@
   .modal-input::-webkit-inner-spin-button {-webkit-appearance:none;margin:0}
 
   @media (max-width:720px){
-    #poiPanel{width:170px;max-height:42%}
+    #btnAddPoi{top:8px;height:42px;font-size:12px;}
+    #btnPoiToggle{top:8px;right:8px;width:42px;height:42px;font-size:13px;}
+    #poiPanel{width:170px;max-height:42%;top:58px;right:8px;}
     #status{bottom:8px;font-size:11.5px;padding:6px 9px;left:8px;right:8px;max-width:none}
     #menuToggle{top:8px;left:8px;width:42px;height:42px;font-size:18px}
     #toolbar{padding-top:58px}
@@ -200,6 +229,9 @@
 <div id="app">
 
   <button id="menuToggle" aria-label="Меню">☰</button>
+  <button id="btnAddPoi" aria-label="Добавить КП">+КП</button>
+  <button id="btnPoiToggle" aria-label="Список КП">КП</button>
+  
   <div id="menuOverlay"></div>
 
   <div id="toolbar">
@@ -214,9 +246,7 @@
       px
     </span>
     <button class="btn" id="btnPos">📍 Указать положение</button>
-    <button class="btn" id="btnFix">🎯 Уточнить</button>
     <button class="btn" id="btnGps">🛰 GPS слежение</button>
-    <button class="btn" id="btnPoi">🎯 Добавить КП</button>
     <button class="btn" id="btnFit">⤢ Вписать</button>
     <button class="btn" id="btnFull">⛶ Полный экран</button>
     <div style="height:1px;background:var(--line);margin:6px 0;"></div>
@@ -312,9 +342,7 @@
   const scaleInput= $('scaleInput');
   const btnScale  = $('btnScale');
   const btnPos    = $('btnPos');
-  const btnFix    = $('btnFix');
   const btnGps    = $('btnGps');
-  const btnPoi    = $('btnPoi');
   const btnFit    = $('btnFit');
   const btnFull   = $('btnFull');
   const btnReset  = $('btnReset');
@@ -330,6 +358,10 @@
   const scaleMetersInput = $('scaleMetersInput');
   const scaleConfirmBtn = $('scaleConfirmBtn');
   const scaleCancelBtn = $('scaleCancelBtn');
+  
+  const btnAddPoi = $('btnAddPoi');
+  const btnPoiToggle = $('btnPoiToggle');
+  const poiPanel = $('poiPanel');
 
   function mPerDegLon(lat) { return 111320 * Math.cos(lat * Math.PI / 180); }
 
@@ -492,6 +524,7 @@
   function openMenu() {
     toolbar.classList.add('open');
     menuOverlay.classList.add('open');
+    poiPanel.classList.remove('open');
   }
   function closeMenu() {
     toolbar.classList.remove('open');
@@ -502,6 +535,11 @@
     else openMenu();
   });
   menuOverlay.addEventListener('click', closeMenu);
+
+  btnPoiToggle.addEventListener('click', () => {
+    closeMenu();
+    poiPanel.classList.toggle('open');
+  });
 
   function applyView() {
     world.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.k})`;
@@ -679,10 +717,12 @@
       };
       state.pendingGPS = null;
       mode = 'idle'; setModeUI(); render();
-      setStatus('Положение зафиксировано. Ваша точка отображается на карте.\n' +
-                (state.scale
-                  ? 'Можно включать «GPS слежение» и добавлять точки интереса.'
-                  : 'Не забудьте задать масштаб — без него не считаются расстояния.'));
+      
+      setStatus('Положение зафиксировано. Запуск GPS-слежения…\n' +
+                (state.scale ? '' : 'Не забудьте задать масштаб.'));
+      if (watchId === null) {
+        startGpsWatch();
+      }
       return;
     }
 
@@ -857,8 +897,7 @@
     if (m !== 'idle') viewport.classList.add('mode-' + m);
     btnScale.classList.toggle('active', m === 'scale');
     btnPos.classList.toggle('active', m === 'position');
-    btnFix.classList.toggle('active', m === 'position');
-    btnPoi.classList.toggle('active', m === 'poi');
+    btnAddPoi.classList.toggle('active', m === 'poi');
   }
   function setModeUI() { setMode(mode); }
 
@@ -1018,38 +1057,10 @@
 
   btnPos.addEventListener('click', () => { startPositioning(); closeMenu(); });
 
-  btnFix.addEventListener('click', () => {
-    if (!state.ref) { startPositioning(); closeMenu(); return; }
-    setStatus('Уточнение положения: определяем GPS…');
-    navigator.geolocation.getCurrentPosition(pos => {
-      state.pendingGPS = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        acc: pos.coords.accuracy
-      };
-      setMode('position');
-      setStatus('Тапните на карте ваше ТЕКУЩЕЕ положение —\n' +
-                'карта и все расстояния будут пересчитаны.');
-    }, err => {
-      setMode('idle');
-      setStatus('Ошибка GPS: ' + err.message);
-    }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
-    closeMenu();
-  });
-
-  btnGps.addEventListener('click', () => {
-    if (watchId !== null) {
-      try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
-      watchId = null;
-      btnGps.classList.remove('active');
-      setStatus('GPS-слежение остановлено.');
-      return;
-    }
-    if (!state.ref) {
-      setStatus('Сначала нажмите «📍 Указать положение» и отметьте себя на карте.');
-      return;
-    }
+  function startGpsWatch() {
+    if (!state.ref) return;
     if (!navigator.geolocation) { setStatus('Геолокация не поддерживается.'); return; }
+    if (watchId !== null) return;
 
     btnGps.classList.add('active');
     setStatus('Запуск GPS-слежения…');
@@ -1058,6 +1069,27 @@
       maximumAge: 1000,
       timeout: 30000
     });
+  }
+
+  function stopGpsWatch() {
+    if (watchId !== null) {
+      try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
+      watchId = null;
+      btnGps.classList.remove('active');
+      setStatus('GPS-слежение остановлено.');
+    }
+  }
+
+  btnGps.addEventListener('click', () => {
+    if (watchId !== null) {
+      stopGpsWatch();
+    } else {
+      if (!state.ref) {
+        setStatus('Сначала нажмите «📍 Указать положение» и отметьте себя на карте.');
+        return;
+      }
+      startGpsWatch();
+    }
     closeMenu();
   });
 
@@ -1078,7 +1110,7 @@
     setStatus('Ошибка GPS: ' + err.message);
   }
 
-  btnPoi.addEventListener('click', () => {
+  btnAddPoi.addEventListener('click', () => {
     if (!state.imgW) { setStatus('Сначала загрузите карту.'); return; }
     if (mode === 'poi') { setMode('idle'); setStatus('Отменено.'); return; }
     setMode('poi');
@@ -1107,11 +1139,7 @@
 
   btnReset.addEventListener('click', async () => {
     if (!confirm('Удалить карту, масштаб, положение и все КП?')) return;
-    if (watchId !== null) {
-      try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
-      watchId = null;
-      btnGps.classList.remove('active');
-    }
+    stopGpsWatch();
     await clearStorage();
     state.imgW = 0; state.imgH = 0;
     state.scale = null;
